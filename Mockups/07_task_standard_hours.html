@@ -1,0 +1,65 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Standard Hours – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a>Reports ▾</a><a class="active">Masters ▾</a><a>Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a class="active" href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Task Standard Hours</h1>
+  <p class="page-sub">The manufacturer "cheat-sheet" standard hours for each Task, shared by equipment dimensions — <b>Manufacturer · Model · Series · Component · Task</b>. These are auto-fetched on the Work Order when a task is booked, and become the efficiency benchmark (actual vs standard).</p>
+
+  <div class="section-h">Equipment Reference (lookup key)</div>
+  <table class="frm">
+    <tr><td class="lbl">Manufacturer <span class="req">*</span></td>
+        <td><select class="mid"><option selected>Allison</option><option>Caterpillar</option><option>Cummins</option></select></td>
+        <td class="lbl2">Series <span class="req">*</span></td><td><input type="text" class="short" value="S-X42"></td></tr>
+    <tr><td class="lbl">Model <span class="req">*</span></td>
+        <td><input type="text" class="mid" value="4000"></td>
+        <td class="lbl2">Component <span class="req">*</span></td><td><input type="text" class="short" value="Transmission"></td></tr>
+    <tr><td class="lbl">Scope of Work</td>
+        <td><input type="text" class="mid" value="Recondition Transmission"></td>
+        <td class="lbl2">Status</td><td><select class="short"><option selected>Active</option><option>Inactive</option></select></td></tr>
+  </table>
+
+  <div class="section-h">Standard Hours by Task</div>
+  <table class="grid">
+    <thead><tr><th>#</th><th>Task</th><th>Default Skill</th><th class="num">Standard Hrs</th><th>Acceptance Benchmark</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Disassemble</td><td>Assistant</td><td class="num">16.00</td><td>Components removed &amp; logged</td><td><a href="#">✕</a></td></tr>
+      <tr><td>2</td><td>Cleaning &amp; Reusability</td><td>Assistant</td><td class="num">7.00</td><td>Parts inspected vs spec</td><td><a href="#">✕</a></td></tr>
+      <tr><td>3</td><td>Assemble</td><td>Lead Hand</td><td class="num">19.00</td><td>Rebuilt to mfr spec</td><td><a href="#">✕</a></td></tr>
+      <tr><td>4</td><td>Testing</td><td>Lead Hand</td><td class="num">8.00</td><td>Pressure/performance pass</td><td><a href="#">✕</a></td></tr>
+      <tr><td colspan="2"><select class="short"><option>+ Add Task…</option><option>Disassemble</option><option>Cleaning &amp; Reusability</option><option>Assemble</option><option>Testing</option><option>Inspection / Diagnosis</option></select></td>
+          <td><select class="short"><option>Lead Hand</option><option>Assistant</option></select></td>
+          <td><input type="text" class="short" placeholder="0.00"></td><td><input type="text" placeholder="benchmark"></td>
+          <td><button class="btn btn-add" style="padding:5px 12px;">Add</button></td></tr>
+    </tbody>
+    <tfoot><tr class="grid-foot"><td colspan="3">Total Standard Hours (Scope)</td><td class="num">50.00</td><td colspan="2"></td></tr></tfoot>
+  </table>
+
+  <div class="btn-row">
+    <button class="btn btn-save">Save</button><button class="btn btn-del">Delete</button>
+    <button class="btn btn-clear">Clear</button>
+    <button class="btn btn-add">Import Standard-Hours File</button>
+    <button class="btn btn-report">Report</button>
+  </div>
+
+  <div class="note"><b>Lookup precedence:</b> standard hours are matched on <b>Manufacturer · Model · Series · Component · Task</b>. Where a more specific match is not found, the system falls back to the nearest level (e.g. Manufacturer · Model · Task) so a standard is always returned. Skill level is for allocation/efficiency only and does not affect the rate.</div>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

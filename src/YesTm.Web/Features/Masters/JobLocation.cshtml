@@ -1,0 +1,102 @@
+@page
+@model YesTm.Web.Features.Masters.JobLocationModel
+@{
+    ViewData["Title"] = "Job Locations";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-location-dot"></i></span> Job Location</h1>
+        <p class="page-sub">Table-driven job locations used by Time Booking and Job Card Entry.</p>
+    </div>
+    <button class="btn btn-primary" data-master-add data-title="Add Job Location"><i class="fa-solid fa-plus me-2"></i>Add Location</button>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable.</div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Code</th><th>Name</th><th class="text-num">Sort</th><th>Status</th><th style="width:160px"></th></tr></thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="5" class="grid-empty">No job locations defined.</td></tr>
+                }
+                else
+                {
+                    @foreach (var l in Model.Items)
+                    {
+                        var active = (l.ACTIVE_YN ?? "Y") == "Y";
+                        <tr class="@(active ? "" : "text-muted")">
+                            <td class="fw-semibold">@l.LOC_CODE</td>
+                            <td>@l.LOC_NAME</td>
+                            <td class="text-num">@l.SORT_ORDER</td>
+                            <td>
+                                @if (active) { <span class="badge-soft badge-normal">Active</span> }
+                                else { <span class="badge-soft" style="background:#eee;color:#888">Inactive</span> }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-row="@System.Text.Json.JsonSerializer.Serialize(l)"><i class="fa-solid fa-pen"></i></button>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="code" value="@l.LOC_CODE" />
+                                    <input type="hidden" name="active" value="@(active ? "N" : "Y")" />
+                                    <button class="btn btn-sm @(active ? "btn-outline-danger" : "btn-outline-success")">
+                                        <i class="fa-solid @(active ? "fa-ban" : "fa-check")"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" asp-page-handler="Save" id="masterForm" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterModalTitle">Add Job Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="IsEdit" value="false" />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Code <span class="req">*</span></label>
+                        <input name="Input.LOC_CODE" class="form-control" data-key-field required maxlength="20" />
+                        <div class="form-text">Stored on the job/time sheet (e.g. Field).</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Name <span class="req">*</span></label>
+                        <input name="Input.LOC_NAME" class="form-control" required maxlength="50" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Sort Order</label>
+                        <input name="Input.SORT_ORDER" type="number" min="0" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Status</label>
+                        <select name="Input.ACTIVE_YN" class="form-select" data-default="Y">
+                            <option value="Y">Active</option>
+                            <option value="N">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/masters.js" asp-append-version="true"></script>
+}

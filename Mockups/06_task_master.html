@@ -1,0 +1,65 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Master – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a>Reports ▾</a><a class="active">Masters ▾</a><a>Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a class="active" href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Task Master</h1>
+  <p class="page-sub">The library of standard tasks that make up the scope of work on a Work Order (e.g. Disassemble, Assemble, Testing). One Work Order has one-to-many tasks; time is booked per task and keyed as <b>Job No + Task</b>. Standard hours for each task are maintained in the Task Standard Hours master.</p>
+
+  <table class="frm">
+    <tr><td class="lbl">Task Code <span class="req">*</span></td>
+        <td><input type="text" class="auto short" value="Auto Generated" disabled></td>
+        <td class="lbl2">Default Skill Level</td>
+        <td><select class="short"><option>Lead Hand</option><option selected>Assistant</option></select></td></tr>
+    <tr><td class="lbl">Task Name <span class="req">*</span></td>
+        <td><input type="text" class="mid" value="Disassemble"></td>
+        <td class="lbl2">Sequence</td><td><input type="text" class="short" value="10"></td></tr>
+    <tr><td class="lbl">Task Group</td>
+        <td><select class="mid"><option selected>Recondition</option><option>Repair</option><option>Inspection</option><option>Service</option></select></td>
+        <td class="lbl2">Chargeable</td>
+        <td class="radio-row"><label><input type="radio" name="chg" checked> Yes</label>
+            <label><input type="radio" name="chg"> No</label></td></tr>
+    <tr><td class="lbl">Acceptance Benchmark</td>
+        <td colspan="3"><input type="text" style="max-width:640px;" value="Components removed, tagged &amp; logged against checklist"></td></tr>
+    <tr><td class="lbl">Status <span class="req">*</span></td>
+        <td><select class="short"><option selected>Active</option><option>Inactive</option></select></td></tr>
+    <tr><td class="lbl">Remarks</td><td colspan="3"><textarea rows="2"></textarea></td></tr>
+  </table>
+
+  <div class="btn-row">
+    <button class="btn btn-save">Save</button><button class="btn btn-del">Delete</button>
+    <button class="btn btn-clear">Clear</button><button class="btn btn-report">Report</button>
+  </div>
+
+  <div class="section-h">Task List</div>
+  <table class="grid">
+    <thead><tr><th>Code</th><th>Task</th><th>Task Group</th><th>Default Skill</th><th class="num">Seq</th><th>Chargeable</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>TSK01</td><td>Disassemble</td><td>Recondition</td><td>Assistant</td><td class="num">10</td><td>Yes</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>TSK02</td><td>Cleaning &amp; Reusability</td><td>Recondition</td><td>Assistant</td><td class="num">20</td><td>Yes</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>TSK03</td><td>Assemble</td><td>Recondition</td><td>Lead Hand</td><td class="num">30</td><td>Yes</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>TSK04</td><td>Testing</td><td>Recondition</td><td>Lead Hand</td><td class="num">40</td><td>Yes</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>TSK05</td><td>Inspection / Diagnosis</td><td>Inspection</td><td>Lead Hand</td><td class="num">5</td><td>Yes</td><td><span class="badge green">Active</span></td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Tasks selected here become the bookable lines on the Work Order. The same task can be shared across equipment — its standard hours vary by Manufacturer / Model / Series / Component (see Task Standard Hours).</p>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  body{ font-family:'Segoe UI','Calibri',sans-serif; font-size:11pt; color:#222; line-height:1.4; }
+  h1.doc{ font-size:24pt; color:#1f6f9e; margin:0 0 4pt; }
+  h2{ font-size:15pt; color:#1f6f9e; border-bottom:1.5pt solid #2f9bd4; padding-bottom:3pt; margin-top:20pt; }
+  h3{ font-size:12.5pt; color:#2b7fb5; margin-top:14pt; margin-bottom:4pt; }
+  p{ margin:6pt 0; }
+  table{ border-collapse:collapse; width:100%; margin:8pt 0; font-size:10pt; }
+  th{ background:#2f9bd4; color:#fff; text-align:left; padding:6pt 8pt; border:0.75pt solid #2f9bd4; }
+  td{ padding:5pt 8pt; border:0.75pt solid #c9d6df; vertical-align:top; }
+  tr:nth-child(even) td{ background:#f3f9fd; }
+  .sub{ color:#666; font-size:11pt; }
+  .tag{ background:#5cb85c; color:#fff; padding:1pt 6pt; border-radius:3pt; font-size:8.5pt; }
+  .tag.b{ background:#e0922f; } .tag.g{ background:#9e9e9e; }
+  .note{ background:#fbfbe8; border:0.75pt solid #e8e3b0; padding:7pt 10pt; margin:8pt 0; font-size:10pt; }
+  .cover{ text-align:left; padding:30pt 0 10pt; }
+  .cover .meta{ margin-top:20pt; font-size:10.5pt; color:#444; }
+  ul{ margin:6pt 0 6pt 18pt; } li{ margin:3pt 0; }
+  .kv td:first-child{ width:34%; font-weight:bold; background:#f3f9fd; }
+  code{ background:#eef4f8; padding:1pt 4pt; color:#1f6f9e; }
+  .center{ text-align:center; }
+</style></head>
+<body>
+
+<!-- ======================= COVER ======================= -->
+<div class="cover">
+  <p class="sub">Solution Proposal &amp; Functional Design</p>
+  <h1 class="doc">Technician Time Management Module</h1>
+  <p class="sub" style="font-size:13pt;">A new module for the YES ERP — Time Booking, Labour Costing &amp; Service Efficiency</p>
+  <table class="kv" style="width:70%; margin-top:24pt;">
+    <tr><td>Prepared for</td><td>Yellow Equipment Services LLC</td></tr>
+    <tr><td>Platform</td><td>ASP.NET 4.8 Web Forms (front-end) · Oracle Database (back-end)</td></tr>
+    <tr><td>Integrates with</td><td>Existing YES ERP — Job Order, Employee, Customer, Supplier, Purchase, Sales</td></tr>
+    <tr><td>Document type</td><td>Solution overview, screens &amp; masters, phasing</td></tr>
+    <tr><td>Version / Date</td><td>v1.0 · June 2026</td></tr>
+    <tr><td>Status</td><td>For client review</td></tr>
+  </table>
+</div>
+
+<!-- ======================= 1. EXEC SUMMARY ======================= -->
+<h2>1. Executive Summary</h2>
+<p>The existing YES ERP captures the <b>material and financial</b> side of every job — Purchase, GRN, Material Issues, Expenses and Sales Invoice all post against a single <b>Job Code</b>. What it does not yet capture is <b>technician time (labour)</b>. As a result, job cost is understated, service efficiency cannot be measured, and true job profitability cannot be calculated.</p>
+<p>This proposal introduces a <b>Technician Time Management Module</b> that plugs into the existing ERP. It adds one new transaction — <b>Time Booking Posting</b> — plus the supporting masters needed to value that time. Because every time booking carries the same <b>Job Code</b>, labour joins material, expense and revenue in the job picture, exactly the way the other documents already do.</p>
+<p>The module delivers: accurate labour cost on each job; automatic Normal/Overtime classification; Industry &amp; Location-based labour rates; and efficiency, productivity and cost-center reporting against the manufacturer "standard hours" and the 192-hour monthly benchmark. Delivery is staged into <b>Phase 1A</b>, <b>Phase 1B</b> and <b>Phase 2</b> per the requirement.</p>
+
+<!-- ======================= 2. BACKGROUND ======================= -->
+<h2>2. Background — Current System</h2>
+<p>The ERP already records, against each Job Code:</p>
+<table>
+  <tr><th>Existing area</th><th>What it captures</th><th>Effect on job</th></tr>
+  <tr><td>Purchase Order / GRN</td><td>Materials &amp; bought-out items received for the job</td><td>Material cost</td></tr>
+  <tr><td>Material Issue</td><td>Stock items consumed on the job</td><td>Material cost</td></tr>
+  <tr><td>Expenses</td><td>Other costs booked to the job</td><td>Other cost</td></tr>
+  <tr><td>Sales Invoice</td><td>Amount billed to the customer</td><td>Revenue</td></tr>
+  <tr><td style="color:#b3433f;"><b>Technician Time</b></td><td style="color:#b3433f;"><b>Not captured today — the gap</b></td><td style="color:#b3433f;"><b>Labour cost (missing)</b></td></tr>
+</table>
+<p>The Job Order header already holds Job No (Job Code), Model, Task Number, Job Location and the technician (Employee number &amp; name) — a solid foundation the new module builds upon.</p>
+
+<!-- ======================= 3. REQUIREMENT ======================= -->
+<h2>3. Requirement Understanding</h2>
+<p>Based on the requirement document shared by the client, the scope is staged as follows:</p>
+
+<h3>Phase 1A — Time Booking &amp; Posting <span class="tag">In scope now</span></h3>
+<ul>
+  <li>Capture technician time bookings against the Job, and generate efficiency &amp; productivity reports by Technician, Location, Work Type and Industry.</li>
+  <li>New fields required: <b>Work (Job) Type</b> including "Non-Chargeable" (treated as expense using COGS / cost rate); <b>Transaction Start Date-Time</b> and <b>End Date-Time</b>; <b>Elapse Time</b> (calculated); <b>Time Type</b> (calculated — before/after duty timings and weekends = Overtime, else Normal).</li>
+  <li><b>Industry Code</b> mapped from the Customer Master (by Customer number); interim mapping provided via file.</li>
+  <li><b>Labour Rate</b> applied by Industry and Field Location; interim rates provided via monthly dump file.</li>
+</ul>
+
+<h3>Phase 1B — Performance Dashboard &amp; KPI <span class="tag b">Next stage</span></h3>
+<ul>
+  <li>Technician Performance Dashboard for Service Operations and Executive KPIs.</li>
+  <li>Record <b>Standard Hours</b> required for the job based on stages (segment list provided).</li>
+</ul>
+
+<h3>Phase 2 — Billing on new platform <span class="tag g">Future</span></h3>
+<ul>
+  <li>Today service is charged as fixed price for labour repair. In future: both <b>Fixed Price</b> and <b>Time &amp; Material</b> for booked hours on the job.</li>
+</ul>
+
+<!-- ======================= 4. GAP ANALYSIS ======================= -->
+<h2>4. Gap Analysis (As-Is vs To-Be)</h2>
+<table>
+  <tr><th>Area</th><th>As-Is (today)</th><th>To-Be (with module)</th></tr>
+  <tr><td>Technician time</td><td>Not recorded against jobs</td><td>Booked per technician, per job, with start/end date-time</td></tr>
+  <tr><td>Normal vs Overtime</td><td>No classification</td><td>Auto-classified from duty timings &amp; weekend calendar</td></tr>
+  <tr><td>Labour cost</td><td>Absent from job cost</td><td>Net hours × Industry/Location rate, posted to the job</td></tr>
+  <tr><td>Industry / Cost Center</td><td>Not linked to labour</td><td>Auto from Customer → Industry, mapped to GL Dimension-3</td></tr>
+  <tr><td>Efficiency</td><td>Not measurable</td><td>Actual vs Standard ("cheat-sheet") hours &amp; 192-hr benchmark</td></tr>
+  <tr><td>WIP</td><td>Labour WIP invisible</td><td>Unbilled labour visible via Job Status (In Progress)</td></tr>
+  <tr><td>Job profitability</td><td>Understated (no labour)</td><td>Complete once labour is included (full P&amp;L in Phase 2)</td></tr>
+</table>
+
+<!-- ======================= 5. SOLUTION OVERVIEW ======================= -->
+<h2>5. Proposed Solution — Overview</h2>
+<p>A self-contained module that sits alongside the existing ERP and reuses its masters. The design principle is simple: <b>the Job Code is the common key.</b> Time bookings stamp the Job Code just like GRN, Issues and Expenses do, so they roll up together automatically.</p>
+<p class="center" style="font-size:11pt; background:#f3f9fd; border:0.75pt solid #c9d6df; padding:10pt;">
+<code>GRN</code> + <code>Material Issue</code> + <code>Expense</code> + <b><code>Technician Time (NEW)</code></b> = <b>Job Cost</b><br>
+<b>Job Cost</b> &nbsp;vs&nbsp; <code>Sales Invoice (Revenue)</code> = <b>Job Profitability</b>
+</p>
+<p>No change is required to how material or expenses are entered. The module only <b>adds</b> the missing labour input and the reporting that becomes possible once labour exists.</p>
+
+<!-- ======================= 6. ARCHITECTURE ======================= -->
+<h2>6. Solution Architecture</h2>
+<table class="kv">
+  <tr><td>Front-end</td><td>ASP.NET <b>4.8 Web Forms</b> (.aspx), styled to match the current YES ERP theme; server-side validation; same authentication / role model.</td></tr>
+  <tr><td>Back-end</td><td><b>Oracle Database</b> — new <code>TM_*</code> tables, views and PL/SQL packages for calculation &amp; posting; foreign keys to existing Job, Employee and Customer tables.</td></tr>
+  <tr><td>Business logic</td><td>Elapse / Net-hours / Time-Type / Rate / Cost computed in PL/SQL (and re-validated in the app layer) so results are consistent across UI and reports.</td></tr>
+  <tr><td>Integration</td><td>Reads existing Job Order, Employee, Customer and Supplier masters. Writes labour cost to the job and posts cost-center / Dimension-3 entries for the GL.</td></tr>
+  <tr><td>Interim data</td><td>Import screens for the monthly Customer→Industry mapping file and the Labour Rate dump file until these are maintained natively.</td></tr>
+  <tr><td>Reporting</td><td>Server-rendered grids + export; KPI dashboard (Phase 1B) summarising bookings (the "pivot-table" diagnostic view).</td></tr>
+</table>
+
+<h3>Indicative Oracle tables</h3>
+<table>
+  <tr><th>Table</th><th>Purpose</th></tr>
+  <tr><td>TM_WORK_TYPE</td><td>Work / Labour types (chargeable, warranty, non-chargeable)</td></tr>
+  <tr><td>TM_INDUSTRY</td><td>Industry &amp; cost-center / Dimension-3 master</td></tr>
+  <tr><td>TM_CUST_INDUSTRY_MAP</td><td>Customer → Industry mapping (with effective dates)</td></tr>
+  <tr><td>TM_LABOUR_RATE</td><td>Rate by Location × Industry × Time Type (cost &amp; charge)</td></tr>
+  <tr><td>TM_DUTY_TIMING / TM_CALENDAR</td><td>Duty hours, weekends, holidays, benchmarks</td></tr>
+  <tr><td>TM_JOB_STAGE_STD</td><td>Job segments &amp; standard "cheat-sheet" hours (Phase 1B)</td></tr>
+  <tr><td>TM_TIME_SHEET / TM_TIME_LINE</td><td>Time Booking header &amp; detail lines (the transaction)</td></tr>
+</table>
+
+<!-- ======================= 7. SCREENS & MASTERS ======================= -->
+<h2>7. Screens &amp; Masters</h2>
+<p>The module comprises six masters, one transaction and two reporting screens. HTML mock-ups of every screen accompany this document.</p>
+<table>
+  <tr><th>#</th><th>Screen</th><th>Type</th><th>Phase</th></tr>
+  <tr><td>1</td><td>Work / Labour Type Master</td><td>Master</td><td>1A</td></tr>
+  <tr><td>2</td><td>Industry &amp; Cost Center Master</td><td>Master</td><td>1A</td></tr>
+  <tr><td>3</td><td>Customer → Industry Mapping (+ import)</td><td>Master</td><td>1A</td></tr>
+  <tr><td>4</td><td>Labour Rate Master (+ monthly import)</td><td>Master</td><td>1A</td></tr>
+  <tr><td>5</td><td>Duty Timing &amp; Working Calendar</td><td>Master</td><td>1A</td></tr>
+  <tr><td>6</td><td>Job Stage &amp; Standard Hours</td><td>Master</td><td>1B</td></tr>
+  <tr><td>7</td><td>Time Booking Posting</td><td>Transaction</td><td>1A</td></tr>
+  <tr><td>8</td><td>Technician Efficiency &amp; Productivity Report</td><td>Report</td><td>1A</td></tr>
+  <tr><td>9</td><td>Performance Dashboard &amp; Executive KPI</td><td>Dashboard</td><td>1B</td></tr>
+</table>
+
+<h3>7.1 Work / Labour Type Master</h3>
+<p>Defines how booked time behaves financially.</p>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td>Work Type Code / Name</td><td>Auto code; e.g. Repair-Revenue, Warranty, Non-Chargeable-Training</td></tr>
+  <tr><td>Category</td><td>Chargeable (Revenue) / Non-Chargeable (Expense) / Warranty</td></tr>
+  <tr><td>Cost Treatment</td><td>Expense → uses COGS (Cost Rate); Revenue → uses Charge Rate</td></tr>
+  <tr><td>Non-Chargeable Sub-Type</td><td>Training, Redo/Rework, Housekeeping, Idle/Loss, Travel</td></tr>
+  <tr><td>Benchmark %</td><td>e.g. Training 4% / 80 hrs; Redo 1% / 22 hrs</td></tr>
+</table>
+
+<h3>7.2 Industry &amp; Cost Center Master</h3>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td>Industry Code / Name</td><td>OG (Oil &amp; Gas), GC (General Construction), …</td></tr>
+  <tr><td>Cost Center</td><td>Used for P&amp;L visibility</td></tr>
+  <tr><td>GL Dimension-3 Code</td><td>Credits labour to employee overhead — avoids double-counting cost</td></tr>
+</table>
+
+<h3>7.3 Customer → Industry Mapping</h3>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td>Customer / Customer No</td><td>Lookup to existing Customer master</td></tr>
+  <tr><td>Industry Code</td><td>Auto-applied to jobs of this customer</td></tr>
+  <tr><td>Default Location, Effective From</td><td>Field / Workshop / Service; effective dating</td></tr>
+  <tr><td>Import</td><td>Interim monthly mapping/dump-file upload with validation</td></tr>
+</table>
+
+<h3>7.4 Labour Rate Master</h3>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td>Location × Industry × Time Type</td><td>Key that selects the rate (e.g. Field/OG/Normal)</td></tr>
+  <tr><td>Charge Rate / Cost Rate</td><td>Billable rate &amp; COGS rate; per requirement: Field $15, Workshop $12</td></tr>
+  <tr><td>OT Multiplier</td><td>Applied to overtime hours</td></tr>
+  <tr><td>Effective From / To</td><td>Rate history; monthly import supported</td></tr>
+</table>
+
+<h3>7.5 Duty Timing &amp; Working Calendar</h3>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td>Duty Start / End, Lunch Break</td><td>Drives Net hours &amp; Normal/Overtime split</td></tr>
+  <tr><td>Weekend / Holiday Calendar</td><td>Time on weekends/holidays = Overtime</td></tr>
+  <tr><td>Available-hours benchmark</td><td>Total 3,211 − Allowed 788 = Available 2,232 hrs; ÷11 = 192 hr/month; daily target 8.3–8.5</td></tr>
+</table>
+
+<h3>7.6 Job Stage &amp; Standard Hours <span class="tag b">Phase 1B</span></h3>
+<table>
+  <tr><th>Field</th><th>Notes</th></tr>
+  <tr><td>Model / Task</td><td>e.g. Allison 4000 — Major Overhaul</td></tr>
+  <tr><td>Stages</td><td>Disassembly (16h), Cleaning (7h), Assembly, Testing — total = cheat-sheet standard (e.g. 50h)</td></tr>
+  <tr><td>Skill Level</td><td>Lead Hand vs Assistant — skill allocation per stage</td></tr>
+</table>
+
+<h3>7.7 Time Booking Posting <span class="tag">Core transaction</span></h3>
+<table>
+  <tr><th>Section</th><th>Fields</th></tr>
+  <tr><td>Header</td><td>Time Sheet No (auto), Posting Date, Job No/Work Order (→ auto Model, Customer, Industry/Cost-Center, Location), Work Type, Job Status (WIP)</td></tr>
+  <tr><td>Detail lines</td><td>Technician, Skill, Stage, Start &amp; End Date-Time, Lunch, Elapse, Net Hrs, Time Type, Rate, Labour Cost</td></tr>
+  <tr><td>Footer</td><td>Total Net Hours, Normal/Overtime split, Total Labour Cost (posts to Job), Job standard hours</td></tr>
+</table>
+
+<h3>7.8 / 7.9 Reports &amp; Dashboard</h3>
+<ul>
+  <li><b>Efficiency &amp; Productivity Report (1A):</b> booked vs 192-hr benchmark, chargeable / non-chargeable / overtime / loss hours, efficiency vs standard, utilisation per technician.</li>
+  <li><b>Performance Dashboard &amp; KPI (1B):</b> utilisation, efficiency, chargeable ratio, overtime %, cost-center margin, and WIP (unbilled labour) — the executive "pivot-table" view.</li>
+</ul>
+
+<!-- ======================= 8. CALCULATION LOGIC ======================= -->
+<h2>8. Business / Calculation Logic</h2>
+<table>
+  <tr><th>Item</th><th>Formula / Rule</th></tr>
+  <tr><td>Elapse Time</td><td>End Date-Time − Start Date-Time</td></tr>
+  <tr><td>Net Labour Hours</td><td>Elapse − Lunch Break</td></tr>
+  <tr><td>Time Type</td><td>Overtime if before/after duty timings or weekend/holiday; otherwise Normal</td></tr>
+  <tr><td>Rate</td><td>Labour Rate Master by Location × Industry × Time Type (OT × multiplier)</td></tr>
+  <tr><td>Labour Cost</td><td>Net Hours × Rate (Cost Rate for non-chargeable, Charge Rate for billable)</td></tr>
+  <tr><td>Labour Efficiency</td><td>Standard Hours ÷ Actual Hours (&gt;100% = ahead of cheat-sheet)</td></tr>
+  <tr><td>Utilisation</td><td>Booked Hours ÷ 192-hr monthly benchmark</td></tr>
+  <tr><td>Loss / Idle Time</td><td>Recorded against management to surface allocation gaps (not technician penalty)</td></tr>
+</table>
+
+<!-- ======================= 9. PHASING ======================= -->
+<h2>9. Phasing &amp; Deliverables</h2>
+<table>
+  <tr><th>Phase</th><th>Deliverables</th><th>Outcome</th></tr>
+  <tr><td><b>1A</b></td><td>Masters 1–5, Time Booking transaction, Efficiency report, import utilities</td><td>Labour captured, valued &amp; costed to jobs; productivity visible</td></tr>
+  <tr><td><b>1B</b></td><td>Job Stage &amp; Standard Hours master, Performance Dashboard &amp; Executive KPI</td><td>Efficiency vs standard; management diagnostics</td></tr>
+  <tr><td><b>2</b></td><td>Fixed-Price &amp; Time-&amp;-Material billing (new platform)</td><td>Labour converts to invoiced revenue → full Job P&amp;L</td></tr>
+</table>
+
+<!-- ======================= 10. ASSUMPTIONS ======================= -->
+<h2>10. Assumptions &amp; Dependencies</h2>
+<ul>
+  <li>Customer→Industry mapping and monthly Labour Rate values are supplied by the client (file-based) until maintained in the masters.</li>
+  <li>Existing Employee master provides technician number, name and (where available) skill level.</li>
+  <li>Duty timings, weekend rule, holiday calendar and the available-hours benchmarks are confirmed during Phase 1A setup.</li>
+  <li>Standard-hours "cheat sheets" (per model/stage) are provided by the client for Phase 1B.</li>
+  <li>GL Dimension-3 / cost-center codes are agreed with Finance for correct overhead offset.</li>
+</ul>
+
+<h2>11. Out of Scope (this proposal)</h2>
+<ul>
+  <li>Customer invoicing of labour (Phase 2 — fixed price &amp; time-and-material).</li>
+  <li>Payroll / attendance integration beyond reading the Employee master.</li>
+  <li>Mobile / field clock-in app (can be a later enhancement).</li>
+</ul>
+
+<!-- ======================= 12. BENEFITS ======================= -->
+<h2>12. Benefits</h2>
+<ul>
+  <li><b>Accurate job cost</b> — labour finally included alongside material and expense.</li>
+  <li><b>Service efficiency visibility</b> — actual vs standard hours, per technician and cost center.</li>
+  <li><b>Correct rate &amp; cost-center posting</b> — Industry/Location rates and Dimension-3 mapping prevent double-counting.</li>
+  <li><b>WIP control</b> — unbilled labour visible through job status.</li>
+  <li><b>Foundation for Phase 2 billing</b> — booked hours feed fixed-price and time-and-material invoicing.</li>
+  <li><b>No disruption</b> — reuses existing masters and the established Job Code linkage.</li>
+</ul>
+
+<h2>13. Next Steps</h2>
+<ul>
+  <li>Client review of these screens &amp; masters and confirmation of Phase 1A scope.</li>
+  <li>Sign-off on field lists, calculation rules and the interim file formats.</li>
+  <li>Finalise effort estimate &amp; timeline for Phase 1A build on ASP.NET 4.8 / Oracle.</li>
+</ul>
+
+<p class="sub center" style="margin-top:24pt;">— End of document —<br>YES ERP · Technician Time Management Module · Solution Proposal v1.0</p>
+
+</body></html>

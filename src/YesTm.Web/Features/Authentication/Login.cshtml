@@ -1,0 +1,84 @@
+@page
+@model YesTm.Web.Features.Authentication.LoginModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Sign in";
+    var company = ViewData["Company"] as string ?? "Yellow Equipment Services LLC";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in &middot; Time Management</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="login-page">
+    <div class="login-wrap">
+        <div class="login-card shadow-lg">
+            <div class="login-brand">
+                <div class="login-logo"><i class="fa-solid fa-business-time"></i></div>
+                <h1>Time Management</h1>
+                <p>@company</p>
+            </div>
+            <div class="login-body">
+                <h2 class="h5 mb-3 text-secondary">Sign in to continue</h2>
+
+                @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                {
+                    <div class="alert alert-danger py-2 d-flex align-items-center" role="alert">
+                        <i class="fa-solid fa-circle-exclamation me-2"></i>
+                        <span>@Model.ErrorMessage</span>
+                    </div>
+                }
+
+                <form method="post">
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <div asp-validation-summary="ModelOnly" class="text-danger small"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.UserName" class="form-label">User Name</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+                            <input asp-for="Input.UserName" class="form-control" autocomplete="username" autofocus />
+                        </div>
+                        <span asp-validation-for="Input.UserName" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="Input.Password" class="form-label">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa-solid fa-lock"></i></span>
+                            <input asp-for="Input.Password" class="form-control" autocomplete="current-password" />
+                        </div>
+                        <span asp-validation-for="Input.Password" class="text-danger small"></span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 btn-lg">
+                        <i class="fa-solid fa-right-to-bracket me-2"></i>Sign In
+                    </button>
+                </form>
+
+                @if (Model.IsDevelopment)
+                {
+                    <div class="text-center my-3 text-muted small">— development preview —</div>
+                    <form method="post" asp-page-handler="Demo" class="d-flex gap-2">
+                        <input type="hidden" asp-for="ReturnUrl" />
+                        <button name="role" value="SITEADMIN" class="btn btn-outline-secondary btn-sm flex-fill">Site Admin</button>
+                        <button name="role" value="ADMIN" class="btn btn-outline-secondary btn-sm flex-fill">Admin</button>
+                        <button name="role" value="USER" class="btn btn-outline-secondary btn-sm flex-fill">User</button>
+                    </form>
+                }
+            </div>
+            <div class="login-foot">
+                <span>WisdomIT &middot; YES ERP &middot; Technician Time Management</span>
+            </div>
+        </div>
+    </div>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js"></script>
+</body>
+</html>

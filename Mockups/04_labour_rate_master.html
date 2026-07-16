@@ -1,0 +1,68 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labour Rate Master – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a>Reports ▾</a><a>Masters ▾</a><a class="active">Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a class="active" href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Labour Rate Master</h1>
+  <p class="page-sub">The hourly rate applied to booked time. Selected automatically by <b>Job Location × Industry × Time Type</b> — the <b>same rate applies to all technicians</b>. Holds both the COGS cost rate and the customer charge rate, with effective dating. Interim: monthly rate dump.</p>
+
+  <table class="frm">
+    <tr><td class="lbl">Rate Code <span class="req">*</span></td><td><input type="text" class="auto short" value="Auto Generated" disabled></td>
+        <td class="lbl2">Currency</td><td><select class="short"><option selected>USD</option><option>AED</option></select></td></tr>
+    <tr><td class="lbl">Job Location <span class="req">*</span></td>
+        <td><select><option selected>Field</option><option>Workshop</option><option>Service</option></select></td>
+        <td class="lbl2">Industry <span class="req">*</span></td>
+        <td><select class="short"><option selected>OG · Oil &amp; Gas</option><option>GC · General Construction</option></select></td></tr>
+    <tr><td class="lbl">Time Type <span class="req">*</span></td>
+        <td><select><option selected>Normal</option><option>Overtime</option></select></td>
+        <td class="lbl2">OT Multiplier</td><td><input type="text" class="short" value="1.50"></td></tr>
+    <tr><td class="lbl">Charge Rate (Billable) /hr <span class="req">*</span></td>
+        <td><input type="text" class="short" value="15.00"></td>
+        <td class="lbl2">Cost Rate (COGS) /hr <span class="req">*</span></td><td><input type="text" class="short" value="9.50"></td></tr>
+    <tr><td class="lbl">Effective From <span class="req">*</span></td>
+        <td><input type="date" class="short" value="2026-06-01"></td>
+        <td class="lbl2">Effective To</td><td><input type="date" class="short"></td></tr>
+    <tr><td class="lbl">Status <span class="req">*</span></td>
+        <td><select class="short"><option selected>Active</option><option>Inactive</option></select></td></tr>
+  </table>
+
+  <div class="btn-row">
+    <button class="btn btn-save">Save</button><button class="btn btn-del">Delete</button>
+    <button class="btn btn-clear">Clear</button>
+    <button class="btn btn-add">Import Monthly Rate File</button>
+    <button class="btn btn-report">Report</button>
+  </div>
+
+  <div class="section-h">Rate Card (Effective Jun-2026)</div>
+  <table class="grid">
+    <thead><tr><th>Rate Code</th><th>Location</th><th>Industry</th><th>Time Type</th><th class="num">Charge /hr</th><th class="num">Cost /hr</th><th>Effective</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>LR-001</td><td>Field</td><td>OG</td><td>Normal</td><td class="num">15.00</td><td class="num">9.50</td><td>01-Jun-2026</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>LR-002</td><td>Workshop</td><td>OG</td><td>Normal</td><td class="num">12.00</td><td class="num">8.00</td><td>01-Jun-2026</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>LR-003</td><td>Field</td><td>GC</td><td>Normal</td><td class="num">15.00</td><td class="num">9.50</td><td>01-Jun-2026</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>LR-004</td><td>Workshop</td><td>GC</td><td>Normal</td><td class="num">12.00</td><td class="num">8.00</td><td>01-Jun-2026</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>LR-005</td><td>Field</td><td>OG</td><td>Overtime</td><td class="num">22.50</td><td class="num">14.25</td><td>01-Jun-2026</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>LR-006</td><td>Workshop</td><td>OG</td><td>Overtime</td><td class="num">18.00</td><td class="num">12.00</td><td>01-Jun-2026</td><td><span class="badge green">Active</span></td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Base rates from requirement document: Field $15 / Workshop $12 (both OG &amp; GC). Overtime applies the OT multiplier. Cost Rate (COGS) drives non-chargeable / expense valuation.</p>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

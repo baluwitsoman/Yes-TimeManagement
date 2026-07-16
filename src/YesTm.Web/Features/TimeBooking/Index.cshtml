@@ -1,0 +1,62 @@
+@page
+@model YesTm.Web.Features.TimeBooking.IndexModel
+@{
+    ViewData["Title"] = "Time Sheets";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-clock"></i></span> Time Sheets</h1>
+        <p class="page-sub">@(Model.ScopedToMe ? "Your recent time bookings." : "All recent time bookings across technicians.")</p>
+    </div>
+    <a asp-page="/TimeBooking/Entry" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>New Time Booking</a>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="fa-solid fa-plug-circle-xmark me-2"></i>
+        <span>Database not reachable. Configure the Oracle connection string to view posted time sheets.</span>
+    </div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Sheet No</th>
+                    <th>Posting Date</th>
+                    <th>Job No</th>
+                    <th>Customer</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th class="text-num">Net Hrs</th>
+                    <th class="text-num">Labour Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Sheets.Count == 0)
+                {
+                    <tr><td colspan="8" class="grid-empty">No time sheets posted yet.</td></tr>
+                }
+                else
+                {
+                    @foreach (var s in Model.Sheets)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@s.TS_SHEET_NO</td>
+                            <td>@s.TS_POSTING_DATE.ToString("dd-MMM-yyyy")</td>
+                            <td>@s.TS_JOB_CODE</td>
+                            <td>@s.TS_CUSTOMER_NAME</td>
+                            <td>@s.TS_LOCATION</td>
+                            <td><span class="badge-soft badge-status">@s.TS_JOB_STATUS</span></td>
+                            <td class="text-num">@s.TS_TOTAL_NET_HOURS.ToString("N2")</td>
+                            <td class="text-num">@s.TS_TOTAL_LABOUR_COST.ToString("N2")</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

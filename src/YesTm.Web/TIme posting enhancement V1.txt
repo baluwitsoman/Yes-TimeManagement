@@ -1,0 +1,9 @@
+Job Code * to Job Card no/ Work order no
+
+2. Time booking screen
+	. show job full mandatory detail on top 
+	 Brand , odel, srl no, jo op date
+3. Job closing date if not fed, while closing the job take system date
+4. Need more enhancement in task and task std hours
+5. 
+

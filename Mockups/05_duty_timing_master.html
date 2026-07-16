@@ -1,0 +1,70 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duty Timing &amp; Calendar – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a>Reports ▾</a><a>Masters ▾</a><a class="active">Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a class="active" href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Duty Timing &amp; Working Calendar</h1>
+  <p class="page-sub">Defines normal duty hours, lunch break and weekends so the system can auto-classify booked time as <b>Normal</b> or <b>Overtime</b>, and holds the available-hours benchmarks used in efficiency reporting.</p>
+
+  <div class="section-h">Duty Timing</div>
+  <table class="frm">
+    <tr><td class="lbl">Shift Code <span class="req">*</span></td><td><input type="text" class="short" value="GEN-DAY"></td>
+        <td class="lbl2">Branch</td><td><select class="short"><option selected>Head Office</option><option>Workshop</option></select></td></tr>
+    <tr><td class="lbl">Duty Start <span class="req">*</span></td><td><input type="time" class="short" value="08:00"></td>
+        <td class="lbl2">Duty End <span class="req">*</span></td><td><input type="time" class="short" value="17:00"></td></tr>
+    <tr><td class="lbl">Lunch Break (hrs) <span class="req">*</span></td><td><input type="text" class="short" value="0.50"></td>
+        <td class="lbl2">Std Hrs / Day</td><td><input type="text" class="short" value="8.50"><span class="hint">Daily booking target 8.3–8.5</span></td></tr>
+    <tr><td class="lbl">Weekend Days <span class="req">*</span></td>
+        <td><input type="text" class="mid" value="Sunday"><span class="hint">Time on weekends = Overtime</span></td></tr>
+    <tr><td class="lbl">Overtime Rule</td>
+        <td><select><option selected>Before/after duty timings &amp; weekends → Overtime</option><option>Manual flag</option></select></td></tr>
+  </table>
+
+  <div class="section-h">Available-Hours Benchmark (per Technician / Year)</div>
+  <table class="frm">
+    <tr><td class="lbl">Total Time (hrs/yr)</td><td><input type="text" class="short" value="3211"></td>
+        <td class="lbl2">Allowed Hrs (Sun/Hol/Vac)</td><td><input type="text" class="short" value="788"></td></tr>
+    <tr><td class="lbl">Available Hrs (calc)</td><td><input type="text" class="short auto" value="2,232" disabled><span class="calc-badge">= Total − Allowed (74%)</span></td>
+        <td class="lbl2">Divisor (months)</td><td><input type="text" class="short" value="11"><span class="hint">1 month official vacation</span></td></tr>
+    <tr><td class="lbl">Monthly Benchmark (calc)</td><td><input type="text" class="short auto" value="192" disabled><span class="calc-badge">Normal-time target / month</span></td>
+        <td class="lbl2">Daily Target</td><td><input type="text" class="short" value="8.30 – 8.50"></td></tr>
+    <tr><td class="lbl">Training Benchmark</td><td><input type="text" class="short" value="80 hrs / 4%"></td>
+        <td class="lbl2">Redo/Rework Benchmark</td><td><input type="text" class="short" value="22 hrs / 1%"></td></tr>
+  </table>
+
+  <div class="btn-row">
+    <button class="btn btn-save">Save</button><button class="btn btn-del">Delete</button>
+    <button class="btn btn-clear">Clear</button><button class="btn btn-report">Report</button>
+  </div>
+
+  <div class="note"><b>Why it matters:</b> these settings let the Time Booking screen calculate <b>Time Type</b> automatically and let the Efficiency report compare each technician against the fixed <b>192-hr</b> monthly target and the 8.3–8.5 hr daily goal — without manual classification.</div>
+
+  <div class="section-h">Holiday Calendar (extract)</div>
+  <table class="grid">
+    <thead><tr><th>Date</th><th>Day</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>06-Jun-2026</td><td>Saturday</td><td><span class="badge blue">Working</span></td><td>—</td></tr>
+      <tr><td>07-Jun-2026</td><td>Sunday</td><td><span class="badge amber">Weekend (OT)</span></td><td>Weekly off</td></tr>
+      <tr><td>16-Jun-2026</td><td>Tuesday</td><td><span class="badge red">Holiday</span></td><td>Public Holiday</td></tr>
+    </tbody>
+  </table>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

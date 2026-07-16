@@ -1,0 +1,85 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YES ERP – Technician Time Management Module</title>
+<link rel="stylesheet" href="css/erp.css">
+<style>
+  .hero{ background:#fff; border:1px solid #dcdcdc; border-radius:3px; padding:22px 26px; max-width:1180px; margin-bottom:16px;}
+  .arch{ display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;}
+  .arch .box{ flex:1; min-width:200px; border:1px solid #e0e6ea; border-radius:5px; padding:14px; background:#fafdff;}
+  .arch .box h4{ margin:0 0 6px; color:#2b7fb5;}
+  .arch .box small{ color:#777;}
+  .cat{ display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:12px; margin-top:8px;}
+  .cat a{ text-decoration:none; color:inherit;}
+  .cat .item{ border:1px solid #e0e6ea; border-left:4px solid #2f9bd4; border-radius:4px; padding:12px 14px; background:#fff; transition:.15s;}
+  .cat .item:hover{ box-shadow:0 2px 8px rgba(0,0,0,.08); border-left-color:#1f6f9e;}
+  .cat .item h4{ margin:0 0 4px; color:#2b7fb5; display:flex; justify-content:space-between; align-items:center;}
+  .cat .item p{ margin:0; color:#777; font-size:12px;}
+  .cat .item.master{ border-left-color:#5cb85c;}
+  .cat .item.txn{ border-left-color:#2f9bd4;}
+  .cat .item.rpt{ border-left-color:#e0922f;}
+  .flow{ font-size:13px; line-height:1.9; color:#444;}
+  .flow code{ background:#eef4f8; padding:2px 6px; border-radius:3px; color:#1f6f9e;}
+</style>
+</head>
+<body>
+
+<div class="erp-header">
+  <h1>Yellow Equipment Services LLC</h1>
+  <span class="welcome">Welcome, Admin ▾</span>
+</div>
+<div class="erp-menu">
+  <a>Transactions ▾</a><a>Reports ▾</a><a>Masters ▾</a><a class="active">Time Management ▾</a>
+  <span class="spacer"></span>
+  <span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span>
+</div>
+
+<div class="page">
+  <div class="hero">
+    <h1 class="page-title"><span class="ico">❄</span> Technician Time Management Module</h1>
+    <p style="color:#555; max-width:900px; margin-top:-6px;">
+      A new module that plugs into the existing YES ERP. It captures <b>technician time bookings against each Job</b>,
+      classifies time as Normal / Overtime, values it using <b>Industry &amp; Location-based labour rates</b>, and feeds
+      <b>efficiency, productivity and performance reporting</b>. All transactions are linked to the existing
+      <b>Job Code</b>, so labour finally joins Material, GRN, Expense and Invoice in the job picture.
+    </p>
+
+    <div class="arch">
+      <div class="box"><h4>Front-End</h4><small>ASP.NET <b>4.8 Web Forms</b> (.aspx)<br>Same UI theme as current YES ERP</small></div>
+      <div class="box"><h4>Back-End</h4><small><b>Oracle Database</b><br>New TM_* tables + views, PL/SQL packages</small></div>
+      <div class="box"><h4>Integration</h4><small>Reuses existing <b>Employee, Customer, Supplier &amp; Job Order</b> masters via Job Code</small></div>
+      <div class="box"><h4>Interim Data</h4><small>Monthly <b>dump / mapping files</b> for Customer→Industry &amp; Labour Rates (import screens)</small></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-h">How it links to the existing ERP — the Job Code is the common key</div>
+    <p class="flow">
+      Every cost document already carries the <code>Job Code</code>. We simply add one more transaction type — <b>Time Booking</b> —
+      that also stamps the <code>Job Code</code>, so it rolls up with everything else:<br>
+      <code>GRN</code> + <code>Material Issue</code> + <code>Expense</code> + <b><code>Technician Time (NEW)</code></b> = Job Cost
+      &nbsp;→&nbsp; vs <code>Invoice</code> (Revenue) = <b>Job Profitability</b>
+    </p>
+
+    <div class="section-h">Screens in this proposal</div>
+    <p class="page-sub">Click any screen to open the mock-up. <span class="badge green">Master</span> &nbsp;<span class="badge blue">Transaction</span> &nbsp;<span class="badge amber">Report / Dashboard</span></p>
+
+    <div class="cat">
+      <a href="01_work_type_master.html"><div class="item master"><h4>1. Work / Labour Type Master <span class="badge green">Phase 1</span></h4><p>Chargeable, Warranty, Non-Chargeable (Training, Redo, Housekeeping, Idle). Drives COGS / expense behaviour.</p></div></a>
+      <a href="02_industry_master.html"><div class="item master"><h4>2. Industry Master <span class="badge green">Phase 1</span></h4><p>OG, GC … used to select the labour rate. No cost-center mapping needed.</p></div></a>
+      <a href="03_customer_industry_mapping.html"><div class="item master"><h4>3. Customer → Industry Mapping <span class="badge green">Phase 1</span></h4><p>Maps Customer No to Industry Code. Interim dump-file import.</p></div></a>
+      <a href="04_labour_rate_master.html"><div class="item master"><h4>4. Labour Rate Master <span class="badge green">Phase 1</span></h4><p>Rate by Location × Industry × Time Type (same for all technicians). Effective dates, monthly import.</p></div></a>
+      <a href="05_duty_timing_master.html"><div class="item master"><h4>5. Duty Timing &amp; Calendar <span class="badge green">Phase 1</span></h4><p>Duty hours &amp; weekends → auto Normal/Overtime. Allowed hours, 192-hr benchmark.</p></div></a>
+      <a href="06_task_master.html"><div class="item master"><h4>6. Task Master <span class="badge green">Phase 1</span></h4><p>Library of tasks (Disassemble, Assemble, Testing) that form the scope of work on a WO. Booked per task.</p></div></a>
+      <a href="07_task_standard_hours.html"><div class="item master"><h4>7. Task Standard Hours <span class="badge green">Phase 1</span></h4><p>"Cheat-sheet" standard hours per task, keyed by Manufacturer · Model · Series · Component · Task.</p></div></a>
+      <a href="08_time_booking_entry.html"><div class="item txn"><h4>8. Time Booking Posting <span class="badge blue">Phase 1</span></h4><p>The core transaction. Technician time booked per Task (Job No + Task) — start/end, net hrs, time type, rate, cost.</p></div></a>
+      <a href="09_technician_efficiency_report.html"><div class="item rpt"><h4>9. Efficiency &amp; Productivity Report <span class="badge blue">Phase 1</span></h4><p>Actual vs task standard &amp; 192-hr target, overtime, chargeable %, loss time.</p></div></a>
+      <a href="10_performance_dashboard.html"><div class="item rpt"><h4>10. Performance Dashboard &amp; KPI <span class="badge blue">Phase 1</span></h4><p>Executive KPIs — utilisation, efficiency, segment margin, overtime trend.</p></div></a>
+    </div>
+  </div>
+</div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up for client review · ASP.NET 4.8 Web Forms / Oracle</div>
+</body>
+</html>

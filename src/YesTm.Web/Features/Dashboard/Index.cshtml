@@ -1,0 +1,88 @@
+@page
+@model YesTm.Web.Features.Dashboard.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+    var s = Model.Summary;
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-gauge-high"></i></span> Dashboard</h1>
+        <p class="page-sub">Welcome back, <strong>@Model.UserName</strong> — @(Model.ScopedToMe ? "your activity" : "team activity") for @DateTime.Now.ToString("MMMM yyyy").</p>
+    </div>
+    <a asp-page="/TimeBooking/Entry" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>New Time Booking</a>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="fa-solid fa-plug-circle-xmark me-2"></i>
+        <span>Database not reachable — figures will populate once the Oracle connection is configured.</span>
+    </div>
+}
+
+<div class="kpi-grid mb-4">
+    <div class="kpi-card">
+        <div class="kpi-icon bg-grad-blue"><i class="fa-solid fa-hourglass-half"></i></div>
+        <div class="kpi-val">@s.TOTAL_NET_HOURS.ToString("N1")</div>
+        <div class="kpi-lbl">Net Labour Hours (MTD)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon bg-grad-green"><i class="fa-solid fa-sack-dollar"></i></div>
+        <div class="kpi-val">@s.TOTAL_LABOUR_COST.ToString("N0")</div>
+        <div class="kpi-lbl">Total Labour Cost (MTD)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon bg-grad-amber"><i class="fa-solid fa-business-time"></i></div>
+        <div class="kpi-val">@s.NORMAL_HOURS.ToString("N0") / @s.OT_HOURS.ToString("N0")</div>
+        <div class="kpi-lbl">Normal / Overtime Hrs</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon bg-grad-purple"><i class="fa-solid fa-file-invoice"></i></div>
+        <div class="kpi-val">@s.SHEET_COUNT.ToString("N0")</div>
+        <div class="kpi-lbl">Time Sheets Posted</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon bg-grad-teal"><i class="fa-solid fa-gauge"></i></div>
+        <div class="kpi-val">@Model.Utilisation.ToString("N0")%</div>
+        <div class="kpi-lbl">Utilisation (vs 192 hr)</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon bg-grad-red"><i class="fa-solid fa-arrow-trend-up"></i></div>
+        <div class="kpi-val">@Model.Efficiency.ToString("N0")%</div>
+        <div class="kpi-lbl">Efficiency (std ÷ actual)</div>
+    </div>
+</div>
+
+<div class="dash-grid">
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-bolt"></i> Quick Actions</div>
+        <div class="quick-links">
+            <a class="quick-link" asp-page="/TimeBooking/Entry"><i class="fa-solid fa-clock"></i>Book Time</a>
+            <a class="quick-link" asp-page="/TimeBooking/Index"><i class="fa-solid fa-list"></i>Time Sheets</a>
+            @if (User.IsInRole(Roles.SiteAdmin))
+            {
+                <a class="quick-link" asp-page="/Administration/UserRoles"><i class="fa-solid fa-user-shield"></i>User Roles</a>
+            }
+            <span class="quick-link" style="opacity:.55;cursor:not-allowed"><i class="fa-solid fa-chart-line"></i>Efficiency<br><small>soon</small></span>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-circle-info"></i> This Month</div>
+        <ul class="list-unstyled mb-0">
+            <li class="d-flex justify-content-between py-2 border-bottom">
+                <span class="text-muted">Active Technicians</span><span class="fw-semibold">@s.TECH_COUNT.ToString("N0")</span>
+            </li>
+            <li class="d-flex justify-content-between py-2 border-bottom">
+                <span class="text-muted">Standard Hours (sum)</span><span class="fw-semibold">@s.STD_HOURS.ToString("N1")</span>
+            </li>
+            <li class="d-flex justify-content-between py-2 border-bottom">
+                <span class="text-muted">Net Labour Hours</span><span class="fw-semibold">@s.TOTAL_NET_HOURS.ToString("N1")</span>
+            </li>
+            <li class="d-flex justify-content-between py-2">
+                <span class="text-muted">Monthly Benchmark</span><span class="fw-semibold">@YesTm.Web.Features.Dashboard.IndexModel.MonthlyBenchmark hr</span>
+            </li>
+        </ul>
+    </div>
+</div>

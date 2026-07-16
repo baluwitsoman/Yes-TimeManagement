@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mockups",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "-l", "4599", "Mockups"],
+      "port": 4599
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/YesTm.Web/YesTm.Web.csproj", "--launch-profile", "http"],
+      "port": 5102
+    }
+  ]
+}

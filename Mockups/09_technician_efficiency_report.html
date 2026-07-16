@@ -1,0 +1,63 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technician Efficiency &amp; Productivity – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a class="active">Reports ▾</a><a>Masters ▾</a><a>Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a class="active" href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Technician Efficiency &amp; Productivity Report</h1>
+  <p class="page-sub">Compares booked hours against the 192-hr monthly benchmark and the job standard hours, and splits chargeable vs non-chargeable / overtime / loss time per technician.</p>
+
+  <table class="frm">
+    <tr><td class="lbl">Period <span class="req">*</span></td>
+        <td><select class="short"><option selected>Jun-2026</option><option>May-2026</option></select></td>
+        <td class="lbl2">Branch</td><td><select class="short"><option selected>All</option><option>Workshop</option></select></td>
+        <td class="lbl2">Industry</td><td><select class="short"><option selected>All</option><option>OG</option><option>GC</option></select></td>
+        <td><button class="btn btn-add" style="margin-left:10px;">View</button>
+            <button class="btn btn-report">Export</button></td></tr>
+  </table>
+
+  <div class="kpi-wrap">
+    <div class="kpi good"><div class="k-val">88%</div><div class="k-lbl">Avg Utilisation (vs 192 hr)</div></div>
+    <div class="kpi"><div class="k-val">94%</div><div class="k-lbl">Avg Labour Efficiency (vs std)</div></div>
+    <div class="kpi warn"><div class="k-val">9.5%</div><div class="k-lbl">Overtime Share</div></div>
+    <div class="kpi bad"><div class="k-val">62 hrs</div><div class="k-lbl">Total Loss / Idle Time</div></div>
+  </div>
+
+  <div class="section-h">Technician Productivity — Jun 2026</div>
+  <table class="grid">
+    <thead><tr>
+      <th>Technician</th><th class="num">Benchmark</th><th class="num">Booked</th>
+      <th class="num">Chargeable</th><th class="num">Non-Chg</th><th class="num">Overtime</th>
+      <th class="num">Loss</th><th class="num">Std Hrs</th><th class="num">Efficiency</th><th>Utilisation</th></tr></thead>
+    <tbody>
+      <tr><td>E-204 · Rajesh K.</td><td class="num">192</td><td class="num">196</td><td class="num">168</td><td class="num">12</td><td class="num">16</td><td class="num">4</td><td class="num">182</td>
+          <td class="num">108%</td><td><span class="bar-track"><span class="bar-fill" style="width:100%"></span></span> 102%</td></tr>
+      <tr><td>E-211 · Sami A.</td><td class="num">192</td><td class="num">170</td><td class="num">150</td><td class="num">14</td><td class="num">6</td><td class="num">18</td><td class="num">160</td>
+          <td class="num">94%</td><td><span class="bar-track"><span class="bar-fill amber" style="width:89%"></span></span> 89%</td></tr>
+      <tr><td>E-230 · Imran H.</td><td class="num">192</td><td class="num">158</td><td class="num">120</td><td class="num">10</td><td class="num">8</td><td class="num">28</td><td class="num">132</td>
+          <td class="num">91%</td><td><span class="bar-track"><span class="bar-fill red" style="width:82%"></span></span> 82%</td></tr>
+      <tr><td>E-245 · Joseph M.</td><td class="num">192</td><td class="num">188</td><td class="num">175</td><td class="num">9</td><td class="num">4</td><td class="num">12</td><td class="num">190</td>
+          <td class="num">101%</td><td><span class="bar-track"><span class="bar-fill" style="width:98%"></span></span> 98%</td></tr>
+    </tbody>
+    <tfoot><tr class="grid-foot"><td>Total / Avg</td><td class="num">768</td><td class="num">712</td><td class="num">613</td><td class="num">45</td><td class="num">34</td><td class="num">62</td><td class="num">664</td><td class="num">94%</td><td>88%</td></tr></tfoot>
+  </table>
+  <p class="legend">Efficiency = Standard Hrs ÷ Actual Hrs on completed jobs. &gt;100% = ahead of cheat-sheet (profit); &lt;100% = profit erosion. Loss/Idle highlights allocation gaps for management.</p>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

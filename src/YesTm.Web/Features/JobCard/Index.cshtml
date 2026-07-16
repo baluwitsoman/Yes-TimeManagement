@@ -1,0 +1,58 @@
+@page
+@model YesTm.Web.Features.JobCard.IndexModel
+@{
+    ViewData["Title"] = "Job Cards";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-id-card"></i></span> Job Card Entry</h1>
+        <p class="page-sub">Create, view, update and delete job cards (jobs) that time is booked against.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <form method="get" class="d-flex gap-2">
+            <input name="Search" value="@Model.Search" class="form-control" placeholder="Search code / desc / customer…" />
+            <button class="btn btn-outline-primary"><i class="fa-solid fa-magnifying-glass"></i></button>
+        </form>
+        <a asp-page="/JobCard/Entry" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>New Job Card</a>
+    </div>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable.</div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr><th>Job Code</th><th>Description</th><th>Customer</th><th>Brand</th><th>Location</th><th>Status</th><th>Opening Date</th><th style="width:80px"></th></tr>
+            </thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="8" class="grid-empty">No job cards found.</td></tr>
+                }
+                else
+                {
+                    @foreach (var j in Model.Items)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@j.MTJ_JOB_CODE</td>
+                            <td>@j.MTJ_JOB_DESC</td>
+                            <td>@j.CUSTOMER_NAME</td>
+                            <td>@j.BRAND_DESC</td>
+                            <td>@j.MTJ_JOB_LOCATION</td>
+                            <td><span class="badge-soft badge-status">@(j.STATUS_DESC ?? "—")</span></td>
+                            <td>@(j.MTJ_JOB_OPENING_DATE?.ToString("dd-MMM-yyyy"))</td>
+                            <td class="text-end">
+                                <a asp-page="/JobCard/Entry" asp-route-jobCode="@j.MTJ_JOB_CODE" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-pen"></i></a>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

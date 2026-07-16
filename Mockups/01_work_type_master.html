@@ -1,0 +1,86 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work / Labour Type Master – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a>Reports ▾</a><a>Masters ▾</a><a class="active">Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a class="active" href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Work / Labour Type Master</h1>
+  <p class="page-sub">Defines how each type of booked time behaves — whether it is Chargeable revenue, Warranty, or Non-Chargeable expense (using COGS cost rate). Selected on the Job header &amp; Time Booking entry.</p>
+
+  <table class="frm">
+    <tr><td class="lbl">Work Type Code <span class="req">*</span></td>
+        <td><input type="text" class="auto short" value="Auto Generated" disabled></td></tr>
+    <tr><td class="lbl">Work Type Name <span class="req">*</span></td>
+        <td><input type="text" class="mid" value="Non-Chargeable – Training"></td></tr>
+    <tr><td class="lbl">Category <span class="req">*</span></td>
+        <td><select>
+            <option>Chargeable (Revenue)</option>
+            <option selected>Non-Chargeable (Expense)</option>
+            <option>Warranty</option>
+        </select></td></tr>
+    <tr><td class="lbl">Chargeable to Customer</td>
+        <td class="radio-row"><label><input type="radio" name="chg"> Yes</label>
+            <label><input type="radio" name="chg" checked> No</label></td></tr>
+    <tr><td class="lbl">Cost Treatment <span class="req">*</span></td>
+        <td><select>
+            <option selected>Expense – uses COGS (Cost Rate)</option>
+            <option>Revenue – uses Charge Rate</option>
+        </select><span class="hint">Non-chargeable hours post to expense category using COGS</span></td></tr>
+    <tr><td class="lbl">Expense / Non-Chargeable Sub-Type</td>
+        <td><select>
+            <option>— None —</option>
+            <option selected>Training</option>
+            <option>Redo / Rework</option>
+            <option>Housekeeping</option>
+            <option>Idle / Loss Time</option>
+            <option>Travel</option>
+        </select></td></tr>
+    <tr><td class="lbl">Benchmark % (of Available Hrs)</td>
+        <td><input type="text" class="short" value="4.00"><span class="hint">e.g. Training 4% / 80 hrs · Redo 1% / 22 hrs</span></td></tr>
+    <tr><td class="lbl">Include in Utilisation</td>
+        <td class="radio-row"><label><input type="radio" name="util"> Yes</label>
+            <label><input type="radio" name="util" checked> No</label></td></tr>
+    <tr><td class="lbl">Status <span class="req">*</span></td>
+        <td><select><option selected>Active</option><option>Inactive</option></select></td></tr>
+    <tr><td class="lbl">Remarks</td><td><textarea rows="2"></textarea></td></tr>
+  </table>
+
+  <div class="btn-row">
+    <button class="btn btn-save">Save</button>
+    <button class="btn btn-del">Delete</button>
+    <button class="btn btn-clear">Clear</button>
+    <button class="btn btn-report">Report</button>
+  </div>
+
+  <div class="section-h">Existing Work / Labour Types</div>
+  <table class="grid">
+    <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Chargeable</th><th>Cost Treatment</th><th>Benchmark</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>WT001</td><td>Repair – Revenue</td><td>Chargeable</td><td>Yes</td><td>Charge Rate</td><td>—</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>WT002</td><td>Warranty</td><td>Warranty</td><td>No</td><td>COGS</td><td>—</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>WT003</td><td>Non-Chargeable – Training</td><td>Non-Chargeable</td><td>No</td><td>COGS</td><td>4% / 80 hrs</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>WT004</td><td>Non-Chargeable – Redo/Rework</td><td>Non-Chargeable</td><td>No</td><td>COGS</td><td>1% / 22 hrs</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>WT005</td><td>Non-Chargeable – Housekeeping</td><td>Non-Chargeable</td><td>No</td><td>COGS</td><td>Monthly</td><td><span class="badge green">Active</span></td></tr>
+      <tr><td>WT006</td><td>Idle / Loss Time</td><td>Non-Chargeable</td><td>No</td><td>COGS</td><td>Diagnostic</td><td><span class="badge green">Active</span></td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Loss / Idle time is recorded against management (not the technician) to surface gaps in job allocation, per the requirement document.</p>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

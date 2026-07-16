@@ -1,0 +1,33 @@
+@page
+@model YesTm.Web.Features.Shared.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body class="login-page">
+    <div class="login-wrap">
+        <div class="login-card shadow-lg text-center">
+            <div class="login-body py-5">
+                <div class="display-1 text-danger mb-3"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <h1 class="h4">Something went wrong</h1>
+                <p class="text-muted">An unexpected error occurred while processing your request.</p>
+                @if (Model.ShowRequestId)
+                {
+                    <p class="small text-muted">Request ID: <code>@Model.RequestId</code></p>
+                }
+                <a class="btn btn-primary mt-2" asp-page="/Dashboard/Index"><i class="fa-solid fa-house me-2"></i>Return Home</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

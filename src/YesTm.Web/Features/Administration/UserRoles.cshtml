@@ -1,0 +1,88 @@
+@page
+@model YesTm.Web.Features.Administration.UserRolesModel
+@{
+    ViewData["Title"] = "User Roles";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-user-shield"></i></span> User Roles</h1>
+        <p class="page-sub">Assign application roles. <strong>Admins</strong> enter all data and define masters; <strong>Site Admins</strong> manage these roles.</p>
+    </div>
+    <form method="get" class="d-flex gap-2">
+        <input name="Search" value="@Model.Search" class="form-control" placeholder="Search name or code…" />
+        <button class="btn btn-outline-primary"><i class="fa-solid fa-magnifying-glass"></i></button>
+    </form>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="fa-solid fa-plug-circle-xmark me-2"></i>
+        <span>Database not reachable. Configure the Oracle connection string to manage user roles.</span>
+    </div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>User Code</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Current Role</th>
+                    <th style="width:320px">Change Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Users.Count == 0)
+                {
+                    <tr><td colspan="5" class="grid-empty">No users found.</td></tr>
+                }
+                else
+                {
+                    @foreach (var u in Model.Users)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@u.USER_CODE</td>
+                            <td>@u.USER_NAME</td>
+                            <td>@u.USER_EMAIL_ID</td>
+                            <td>
+                                @{
+                                    var cls = u.ROLE_CODE switch
+                                    {
+                                        "SITEADMIN" => "bg-grad-purple",
+                                        "ADMIN" => "bg-grad-blue",
+                                        _ => "bg-grad-teal"
+                                    };
+                                }
+                                <span class="badge-soft @cls" style="color:#fff">@YesTm.Web.Common.Security.Roles.DisplayName(u.ROLE_CODE)</span>
+                            </td>
+                            <td>
+                                <form method="post" asp-page-handler="SetRole" class="d-flex gap-2">
+                                    <input type="hidden" name="userId" value="@u.USER_ID" />
+                                    <input type="hidden" name="Search" value="@Model.Search" />
+                                    <select name="role" class="form-select form-select-sm">
+                                        @foreach (var r in YesTm.Web.Features.Administration.UserRolesModel.AssignableRoles)
+                                        {
+                                            if (r == u.ROLE_CODE)
+                                            {
+                                                <option value="@r" selected>@YesTm.Web.Common.Security.Roles.DisplayName(r)</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@r">@YesTm.Web.Common.Security.Roles.DisplayName(r)</option>
+                                            }
+                                        }
+                                    </select>
+                                    <button class="btn btn-sm btn-primary"><i class="fa-solid fa-check me-1"></i>Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

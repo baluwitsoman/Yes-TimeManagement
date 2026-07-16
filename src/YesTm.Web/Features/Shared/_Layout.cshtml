@@ -1,0 +1,147 @@
+@using System.Security.Claims
+@inject IConfiguration Configuration
+@{
+    var company = Configuration["TimeManagement:CompanyName"] ?? "Yellow Equipment Services LLC";
+    var appTitle = Configuration["TimeManagement:ApplicationTitle"] ?? "Technician Time Management";
+
+    var userName = User.Identity?.Name ?? "User";
+    var role = User.FindFirstValue(ClaimTypes.Role) ?? Roles.User;
+    var roleName = Roles.DisplayName(role);
+    var isAdmin = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SiteAdmin);
+    var isSiteAdmin = User.IsInRole(Roles.SiteAdmin);
+
+    var path = (Context.Request.Path.Value ?? string.Empty).ToLowerInvariant();
+    string active(string segment) => path.Contains(segment) ? "active" : string.Empty;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] &middot; @appTitle</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+<div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="app-sidebar" id="appSidebar">
+        <div class="sidebar-brand">
+            <i class="fa-solid fa-business-time"></i>
+            <span>YES&nbsp;TM</span>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-section">Main</div>
+            <a class="nav-link @active("/dashboard")" asp-page="/Dashboard/Index">
+                <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+            </a>
+            <a class="nav-link @active("/timebooking")" asp-page="/TimeBooking/Index">
+                <i class="fa-solid fa-clock"></i><span>Time Booking</span>
+            </a>
+
+            @if (isAdmin)
+            {
+                <div class="nav-section">Job Cards</div>
+                <a class="nav-link @active("/jobcard")" asp-page="/JobCard/Index"><i class="fa-solid fa-id-card"></i><span>Job Card Entry</span></a>
+            }
+
+            <div class="nav-section">Masters</div>
+            @if (isAdmin)
+            {
+                <a class="nav-link @active("/masters/joblocation")" asp-page="/Masters/JobLocation"><i class="fa-solid fa-location-dot"></i><span>Job Location</span></a>
+                <a class="nav-link @active("/masters/worktype")" asp-page="/Masters/WorkType"><i class="fa-solid fa-briefcase"></i><span>Work / Labour Type</span></a>
+                <a class="nav-link @active("/masters/industry")" asp-page="/Masters/Industry"><i class="fa-solid fa-industry"></i><span>Industry</span></a>
+                <a class="nav-link @active("/masters/customerindustry")" asp-page="/Masters/CustomerIndustry"><i class="fa-solid fa-people-arrows"></i><span>Customer → Industry</span></a>
+                <a class="nav-link @active("/masters/labourrate")" asp-page="/Masters/LabourRate"><i class="fa-solid fa-money-bill-wave"></i><span>Labour Rate</span></a>
+                <a class="nav-link @active("/masters/dutytiming")" asp-page="/Masters/DutyTiming"><i class="fa-solid fa-calendar-day"></i><span>Duty Timing</span></a>
+                <a class="nav-link @active("/masters/task")" asp-page="/Masters/Task"><i class="fa-solid fa-list-check"></i><span>Task Master</span></a>
+                <a class="nav-link @active("/masters/taskstdhours")" asp-page="/Masters/TaskStdHours"><i class="fa-solid fa-stopwatch"></i><span>Task Std Hours</span></a>
+            }
+            else
+            {
+                <div class="nav-muted"><i class="fa-solid fa-lock"></i> Admin only</div>
+            }
+
+            <div class="nav-section">Reports</div>
+            <a class="nav-link soon"><i class="fa-solid fa-chart-line"></i><span>Efficiency</span><em>soon</em></a>
+            <a class="nav-link soon"><i class="fa-solid fa-chart-pie"></i><span>Performance KPI</span><em>soon</em></a>
+
+            @if (isSiteAdmin)
+            {
+                <div class="nav-section">Administration</div>
+                <a class="nav-link @active("/administration")" asp-page="/Administration/UserRoles">
+                    <i class="fa-solid fa-user-shield"></i><span>User Roles</span>
+                </a>
+            }
+        </nav>
+        <div class="sidebar-foot">v0.1 &middot; Phase&nbsp;0</div>
+    </aside>
+
+    <!-- Main column -->
+    <div class="app-main">
+        <header class="app-header">
+            <button class="btn-burger" id="burger" type="button" aria-label="Toggle menu">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="header-titles">
+                <div class="header-company">@company</div>
+                <div class="header-app">@appTitle</div>
+            </div>
+            <div class="header-spacer"></div>
+            <div class="dropdown">
+                <button class="user-chip dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" type="button">
+                    <span class="user-avatar">@(userName.Length > 0 ? userName[..1].ToUpper() : "U")</span>
+                    <span class="user-meta">
+                        <span class="user-name">@userName</span>
+                        <span class="user-role">@roleName</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-down ms-1"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><span class="dropdown-item-text small text-muted">Signed in as <strong>@userName</strong></span></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
+                        <form method="post" asp-page="/Authentication/Logout">
+                            <button type="submit" class="dropdown-item text-danger">
+                                <i class="fa-solid fa-right-from-bracket me-2"></i>Sign out
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </header>
+
+        <main class="app-content">
+            @if (TempData["Success"] is string okMsg)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fa-solid fa-circle-check me-2"></i>@okMsg
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            @if (TempData["Error"] is string errMsg)
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fa-solid fa-circle-exclamation me-2"></i>@errMsg
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            @RenderBody()
+        </main>
+
+        <footer class="app-footer">
+            WisdomIT &middot; YES ERP &middot; Technician Time Management Module &middot; @DateTime.Now.Year
+        </footer>
+    </div>
+</div>
+
+<div class="sidebar-backdrop" id="backdrop"></div>
+
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

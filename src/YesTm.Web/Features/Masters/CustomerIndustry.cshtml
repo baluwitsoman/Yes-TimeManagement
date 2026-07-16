@@ -1,0 +1,123 @@
+@page
+@model YesTm.Web.Features.Masters.CustomerIndustryModel
+@{
+    ViewData["Title"] = "Customer → Industry";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-people-arrows"></i></span> Customer → Industry Mapping</h1>
+        <p class="page-sub">Maps each customer to an industry so jobs auto-pick the right labour rate.</p>
+    </div>
+    <button class="btn btn-primary" data-master-add data-title="Add Mapping"><i class="fa-solid fa-plus me-2"></i>Add Mapping</button>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable.</div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Customer Code</th><th>Customer</th><th>Industry</th><th>Default Location</th><th>Effective From</th><th>Status</th><th style="width:160px"></th></tr></thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="7" class="grid-empty">No mappings defined.</td></tr>
+                }
+                else
+                {
+                    @foreach (var m in Model.Items)
+                    {
+                        var active = (m.CIM_ACTIVE_YN ?? "Y") == "Y";
+                        <tr class="@(active ? "" : "text-muted")">
+                            <td class="fw-semibold">@m.CIM_CUSTOMER_CODE</td>
+                            <td>@m.CUSTOMER_NAME</td>
+                            <td>@m.CIM_INDUSTRY_CODE @(string.IsNullOrEmpty(m.INDUSTRY_NAME) ? "" : $"· {m.INDUSTRY_NAME}")</td>
+                            <td>@m.CIM_DEFAULT_LOCATION</td>
+                            <td>@(m.CIM_EFFECTIVE_FROM?.ToString("dd-MMM-yyyy"))</td>
+                            <td>
+                                @if (active) { <span class="badge-soft badge-normal">Active</span> }
+                                else { <span class="badge-soft" style="background:#eee;color:#888">Inactive</span> }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-row="@System.Text.Json.JsonSerializer.Serialize(m)"><i class="fa-solid fa-pen"></i></button>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="id" value="@m.CIM_ID" />
+                                    <input type="hidden" name="active" value="@(active ? "N" : "Y")" />
+                                    <button class="btn btn-sm @(active ? "btn-outline-danger" : "btn-outline-success")">
+                                        <i class="fa-solid @(active ? "fa-ban" : "fa-check")"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" asp-page-handler="Save" id="masterForm" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterModalTitle">Add Mapping</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="IsEdit" value="false" />
+                <input type="hidden" name="Input.CIM_ID" data-default="0" />
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label class="form-label">Customer <span class="req">*</span></label>
+                        <select name="Input.CIM_CUSTOMER_CODE" class="form-select" required>
+                            <option value="">— Select Customer —</option>
+                            @foreach (var c in Model.Customers)
+                            {
+                                <option value="@c.CODE">@c.CODE — @c.NAME</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Industry <span class="req">*</span></label>
+                        <select name="Input.CIM_INDUSTRY_CODE" class="form-select" required>
+                            <option value="">—</option>
+                            @foreach (var i in Model.Industries)
+                            {
+                                <option value="@i.INDUSTRY_CODE">@i.INDUSTRY_CODE — @i.INDUSTRY_NAME</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Default Location</label>
+                        <select name="Input.CIM_DEFAULT_LOCATION" class="form-select">
+                            <option value="">—</option>
+                            <option>Field</option><option>Workshop</option><option>Service</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Effective From</label>
+                        <input name="Input.CIM_EFFECTIVE_FROM" type="date" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Status</label>
+                        <select name="Input.CIM_ACTIVE_YN" class="form-select" data-default="Y">
+                            <option value="Y">Active</option>
+                            <option value="N">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/masters.js" asp-append-version="true"></script>
+}

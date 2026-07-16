@@ -1,0 +1,150 @@
+/* ============================================================
+   YES ERP – Technician Time Management Module
+   Mock-up stylesheet (matches existing ViennSoft / YES theme)
+   ============================================================ */
+* { box-sizing: border-box; }
+html, body {
+    margin: 0; padding: 0;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 13px; color: #333; background: #eef0f2;
+}
+
+/* ---------- Top company header ---------- */
+.erp-header {
+    background: linear-gradient(180deg,#36a2d8 0%,#2b93c9 100%);
+    color: #fff; height: 46px; display: flex; align-items: center;
+    justify-content: center; position: relative;
+}
+.erp-header h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing:.3px; }
+.erp-header .welcome { position: absolute; right: 14px; font-size: 12px; opacity:.95; }
+
+/* ---------- Menu strip ---------- */
+.erp-menu {
+    background: #2f9bd4; height: 34px; display: flex; align-items: center;
+    padding: 0 8px; gap: 4px;
+}
+.erp-menu a {
+    color: #fff; text-decoration: none; font-size: 13px;
+    padding: 6px 12px; border-radius: 3px;
+}
+.erp-menu a:hover, .erp-menu a.active { background: rgba(255,255,255,.18); }
+.erp-menu .spacer { flex: 1; }
+.erp-menu .pill {
+    background: #2484bb; border: 1px solid #56a9d4; border-radius: 4px;
+    padding: 5px 12px; font-size: 12px;
+}
+
+/* ---------- Module sub-nav (mock navigation between screens) ---------- */
+.mod-nav {
+    background:#e8f4fb; border-bottom:1px solid #cfe6f4;
+    padding:6px 14px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+}
+.mod-nav .lbl{ color:#2b7fb5; font-weight:600; margin-right:6px; }
+.mod-nav a {
+    color:#2b7fb5; text-decoration:none; font-size:12px;
+    padding:4px 9px; border:1px solid #bcdcef; border-radius:3px; background:#fff;
+}
+.mod-nav a:hover{ background:#2f9bd4; color:#fff; border-color:#2f9bd4; }
+.mod-nav a.active{ background:#2f9bd4; color:#fff; border-color:#2f9bd4; }
+.mod-nav .tag{ font-size:11px; background:#5cb85c; color:#fff; border-radius:3px; padding:1px 6px; margin-left:4px; }
+.mod-nav .tag.p1b{ background:#e0922f; }
+.mod-nav .tag.p2{ background:#9e9e9e; }
+
+/* ---------- Page card ---------- */
+.page { padding: 16px 22px; }
+.card {
+    background:#fff; border:1px solid #dcdcdc; border-radius:3px;
+    padding: 18px 24px 26px; max-width: 1180px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+.page-title {
+    color:#2b7fb5; font-size:20px; font-weight:600; margin:0 0 18px;
+    display:flex; align-items:center; gap:8px;
+}
+.page-title .ico{ color:#34a2c8; font-size:18px; }
+.page-sub{ color:#777; font-size:12px; margin:-12px 0 16px; }
+
+/* ---------- Forms ---------- */
+.frm { width:100%; border-collapse:separate; border-spacing:0 9px; }
+.frm td { vertical-align: middle; }
+.frm td.lbl { width: 220px; color:#333; padding-right:10px; }
+.frm td.lbl2{ width: 165px; color:#333; padding:0 10px 0 26px; }
+.req { color:#5cb85c; font-weight:700; }
+input[type=text], input[type=number], input[type=date],
+input[type=datetime-local], input[type=time], select, textarea {
+    width: 100%; max-width: 430px; padding:6px 8px; font-size:13px;
+    border:1px solid #c9c9c9; border-radius:2px; background:#fff; color:#333;
+}
+select { max-width:300px; }
+input.short{ max-width:200px; }
+input.mid{ max-width:300px; }
+input[disabled], input.auto {
+    background:#ececec; color:#888;
+}
+textarea{ max-width:640px; resize:vertical; }
+.field-icon{
+    display:inline-block; width:26px; height:30px; vertical-align:middle;
+    border:1px solid #c9c9c9; border-left:none; border-radius:0 2px 2px 0;
+    background:#f3f3f3; text-align:center; line-height:30px; color:#5a93b8; cursor:pointer;
+}
+.with-icon{ display:inline-flex; align-items:center; }
+.with-icon input{ border-radius:2px 0 0 2px; }
+.radio-row label{ margin-right:26px; cursor:pointer; }
+.hint{ color:#9a9a9a; font-size:11px; margin-left:8px; }
+.calc-badge{ font-size:11px; color:#2b7fb5; background:#e8f4fb; border:1px solid #cfe6f4;
+    border-radius:3px; padding:2px 7px; margin-left:8px; }
+
+/* ---------- Buttons ---------- */
+.btn-row { margin-top:20px; text-align:center; }
+.btn {
+    border:none; color:#fff; padding:8px 20px; font-size:13px; border-radius:3px;
+    cursor:pointer; margin:0 4px;
+}
+.btn-save  { background:#69a74e; }
+.btn-del   { background:#c0504d; }
+.btn-clear { background:#e0922f; }
+.btn-report{ background:#d4bb1f; }
+.btn-add   { background:#2f9bd4; }
+.btn:hover { opacity:.9; }
+
+/* ---------- Grids ---------- */
+.grid { width:100%; border-collapse:collapse; margin-top:6px; font-size:12.5px; }
+.grid th {
+    background:#dff0fa; color:#1f6f9e; text-align:left;
+    padding:8px 10px; border:1px solid #cfe2ee; font-weight:600; white-space:nowrap;
+}
+.grid td { padding:7px 10px; border:1px solid #e3e9ed; }
+.grid tr:nth-child(even) td { background:#f7fbfe; }
+.grid tr:hover td { background:#eef7fd; }
+.grid .num{ text-align:right; }
+.grid input, .grid select{ padding:4px 6px; max-width:100%; }
+.grid-foot td{ background:#eef3f6 !important; font-weight:600; }
+.section-h{
+    color:#2b7fb5; font-weight:600; font-size:14px; margin:22px 0 6px;
+    border-bottom:1px solid #e3e9ed; padding-bottom:5px;
+}
+.badge{ display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; color:#fff; }
+.badge.green{ background:#5cb85c; } .badge.amber{ background:#e0922f; }
+.badge.red{ background:#c0504d; } .badge.grey{ background:#9e9e9e; } .badge.blue{ background:#2f9bd4; }
+
+/* ---------- KPI cards (dashboard) ---------- */
+.kpi-wrap{ display:flex; flex-wrap:wrap; gap:14px; margin:8px 0 20px; }
+.kpi{ flex:1; min-width:170px; background:#fff; border:1px solid #e0e6ea; border-top:3px solid #2f9bd4;
+    border-radius:4px; padding:14px 16px; }
+.kpi .k-val{ font-size:24px; font-weight:700; color:#2b7fb5; }
+.kpi .k-lbl{ font-size:12px; color:#777; margin-top:3px; }
+.kpi.good{ border-top-color:#5cb85c;} .kpi.good .k-val{ color:#4a8f3c;}
+.kpi.warn{ border-top-color:#e0922f;} .kpi.warn .k-val{ color:#c47a1f;}
+.kpi.bad { border-top-color:#c0504d;} .kpi.bad  .k-val{ color:#b3433f;}
+
+/* bar mock */
+.bar-track{ background:#eef3f6; border-radius:3px; height:16px; width:140px; display:inline-block; vertical-align:middle; overflow:hidden;}
+.bar-fill{ height:100%; background:#5cb85c; display:block; }
+.bar-fill.amber{ background:#e0922f;} .bar-fill.red{ background:#c0504d;}
+
+/* note box */
+.note{ background:#fbfbe8; border:1px solid #e8e3b0; border-radius:4px; padding:10px 14px;
+    font-size:12px; color:#6b6730; margin:14px 0; }
+.note b{ color:#5a561f; }
+.legend{ font-size:11px; color:#888; margin-top:6px; }
+.footer-note{ max-width:1180px; margin:14px auto 30px; color:#9a9a9a; font-size:11px; text-align:center; }

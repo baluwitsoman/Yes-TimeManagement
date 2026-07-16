@@ -1,0 +1,16 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+
+## App
+logs/
+keys/
+publish/
+
+## Office temp
+~$*
+
+## Node (mockups serve)
+node_modules/

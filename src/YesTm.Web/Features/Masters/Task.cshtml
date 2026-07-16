@@ -1,0 +1,129 @@
+@page
+@model YesTm.Web.Features.Masters.TaskModel
+@{
+    ViewData["Title"] = "Tasks";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-list-check"></i></span> Task Master</h1>
+        <p class="page-sub">Bookable tasks (Disassemble, Assemble, Testing …) that form the scope of work on a Work Order.</p>
+    </div>
+    <button class="btn btn-primary" data-master-add data-title="Add Task"><i class="fa-solid fa-plus me-2"></i>Add Task</button>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable.</div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Code</th><th>Name</th><th>Group</th><th class="text-num">Seq</th><th>Default Skill</th><th class="text-num">Std Hrs</th><th>Chargeable</th><th>Status</th><th style="width:160px"></th></tr></thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="9" class="grid-empty">No tasks defined.</td></tr>
+                }
+                else
+                {
+                    @foreach (var t in Model.Items)
+                    {
+                        var active = (t.ACTIVE_YN ?? "Y") == "Y";
+                        <tr class="@(active ? "" : "text-muted")">
+                            <td class="fw-semibold">@t.TASK_CODE</td>
+                            <td>@t.TASK_NAME</td>
+                            <td>@t.TASK_GROUP</td>
+                            <td class="text-num">@t.SEQ_NO</td>
+                            <td>@t.DEFAULT_SKILL</td>
+                            <td class="text-num">@t.STD_HOURS.ToString("N2")</td>
+                            <td>@((t.CHARGEABLE_YN ?? "Y") == "Y" ? "Yes" : "No")</td>
+                            <td>
+                                @if (active) { <span class="badge-soft badge-normal">Active</span> }
+                                else { <span class="badge-soft" style="background:#eee;color:#888">Inactive</span> }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-row="@System.Text.Json.JsonSerializer.Serialize(t)"><i class="fa-solid fa-pen"></i></button>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="code" value="@t.TASK_CODE" />
+                                    <input type="hidden" name="active" value="@(active ? "N" : "Y")" />
+                                    <button class="btn btn-sm @(active ? "btn-outline-danger" : "btn-outline-success")">
+                                        <i class="fa-solid @(active ? "fa-ban" : "fa-check")"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" asp-page-handler="Save" id="masterForm" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterModalTitle">Add Task</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="IsEdit" value="false" />
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Code <span class="req">*</span></label>
+                        <input name="Input.TASK_CODE" class="form-control" data-key-field required maxlength="15" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Name <span class="req">*</span></label>
+                        <input name="Input.TASK_NAME" class="form-control" required maxlength="100" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Group</label>
+                        <input name="Input.TASK_GROUP" class="form-control" maxlength="50" placeholder="e.g. Recondition" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sequence</label>
+                        <input name="Input.SEQ_NO" type="number" class="form-control" min="0" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Std Hours</label>
+                        <input name="Input.STD_HOURS" type="number" step="0.25" min="0" class="form-control" data-default="0" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Default Skill</label>
+                        <select name="Input.DEFAULT_SKILL" class="form-select">
+                            <option value="">—</option>
+                            <option value="Lead Hand">Lead Hand</option>
+                            <option value="Assistant">Assistant</option>
+                            <option value="Technician">Technician</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Chargeable</label>
+                        <select name="Input.CHARGEABLE_YN" class="form-select" data-default="Y">
+                            <option value="Y">Yes</option>
+                            <option value="N">No</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <select name="Input.ACTIVE_YN" class="form-select" data-default="Y">
+                            <option value="Y">Active</option>
+                            <option value="N">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/masters.js" asp-append-version="true"></script>
+}

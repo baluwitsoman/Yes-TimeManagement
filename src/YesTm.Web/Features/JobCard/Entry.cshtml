@@ -1,0 +1,148 @@
+@page
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model YesTm.Web.Features.JobCard.EntryModel
+@{
+    ViewData["Title"] = Model.IsEdit ? "Edit Job Card" : "New Job Card";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-id-card"></i></span> @(Model.IsEdit ? "Edit Job Card" : "New Job Card")</h1>
+        <p class="page-sub">@(Model.IsEdit ? $"Job Code {Model.Input.MTJ_JOB_CODE}" : "Job Code is generated automatically on save.")</p>
+    </div>
+    <a asp-page="/JobCard/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Job Cards</a>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable — lookups unavailable.</div>
+}
+
+<form method="post" asp-page-handler="Save">
+    <input asp-for="IsEdit" type="hidden" />
+    <div asp-validation-summary="All" class="alert alert-danger py-2"></div>
+
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-file-lines"></i> Job Card Details</div>
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label">Customer <span class="req">*</span></label>
+                <select asp-for="Input.MTJ_PARTY_CODE" asp-items="@(new SelectList(Model.Customers, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select Customer —</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Job Location <span class="req">*</span></label>
+                <select asp-for="Input.MTJ_JOB_LOCATION" asp-items="@(new SelectList(Model.Locations, "CODE", "NAME"))" class="form-select"></select>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Brand <span class="req">*</span></label>
+                <select asp-for="Input.MTJ_BRAND" asp-items="@(new SelectList(Model.Brands, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select —</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Equipment Type <span class="req">*</span></label>
+                <select asp-for="Input.MTJ_EQUIPMENT_TYPE_ID" asp-items="@(new SelectList(Model.EquipmentTypes, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select —</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Type of Service <span class="req">*</span></label>
+                <select asp-for="Input.MTJ_SERVICE_TYPE_ID" asp-items="@(new SelectList(Model.ServiceTypes, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select —</option>
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Machine / Gen Set Sno</label>
+                <input asp-for="Input.MTJ_SERIAL_NO" class="form-control" maxlength="25" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Job Code</label>
+                <input asp-for="Input.MTJ_JOB_CODE" class="form-control field-auto" readonly placeholder="Auto Generated" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Job Status <span class="req">*</span></label>
+                <select asp-for="Input.MTJ_JOB_STATUS" asp-items="@(new SelectList(Model.JobStatuses, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select —</option>
+                </select>
+            </div>
+
+            <div class="col-md-12">
+                <label class="form-label">Job Description <span class="req">*</span></label>
+                <textarea asp-for="Input.MTJ_JOB_DESC" class="form-control" rows="2" maxlength="200"></textarea>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Job Opening Date <span class="req">*</span></label>
+                <input asp-for="Input.MTJ_JOB_OPENING_DATE" type="date" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Job Service Date</label>
+                <input asp-for="Input.MTJ_JOB_SERVICE_START_DATE" type="date" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Job Closing Date</label>
+                <input asp-for="Input.MTJ_JOB_CLOSING_DATE" type="date" class="form-control" />
+            </div>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-address-book"></i> Contact &amp; Assignment</div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Customer Contact Person</label>
+                <input asp-for="Input.MTJ_CONTACT_PERSON" class="form-control" maxlength="100" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Customer Phone No</label>
+                <input asp-for="Input.MTJ_CONTACT_PHONE" class="form-control" maxlength="25" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Branch</label>
+                <select asp-for="Input.MTJ_BRANCH" asp-items="@(new SelectList(Model.Branches, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select —</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">SalesMan</label>
+                <select asp-for="Input.MTJ_SALES_EMPLOYEE_CODE" asp-items="@(new SelectList(Model.Salesmen, "CODE", "NAME"))" class="form-select">
+                    <option value="">— Select —</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">SalesMan Phone No</label>
+                <input asp-for="Input.MTJ_SALES_EMPLOYEE_PHONE" class="form-control" maxlength="25" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Sector</label>
+                <input asp-for="Input.MTJ_SECTOR" class="form-control" maxlength="100" />
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">Remarks</label>
+                <textarea asp-for="Input.MTJ_REMARKS" class="form-control" rows="2" maxlength="1000"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+        <a asp-page="/JobCard/Entry" class="btn btn-outline-secondary"><i class="fa-solid fa-file me-2"></i>Clear / New</a>
+    </div>
+</form>
+
+@if (Model.IsEdit)
+{
+    <form method="post" asp-page-handler="Delete" class="mt-2"
+          onsubmit="return confirm('Delete job card @Model.Input.MTJ_JOB_CODE? This cannot be undone.');">
+        <input type="hidden" name="jobCode" value="@Model.Input.MTJ_JOB_CODE" />
+        <button type="submit" class="btn btn-outline-danger"><i class="fa-solid fa-trash me-2"></i>Delete Job Card</button>
+    </form>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

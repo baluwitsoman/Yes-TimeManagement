@@ -1,0 +1,118 @@
+@page
+@model YesTm.Web.Features.Masters.DutyTimingModel
+@{
+    ViewData["Title"] = "Duty Timing";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-calendar-day"></i></span> Duty Timing &amp; Calendar</h1>
+        <p class="page-sub">Duty hours, lunch and weekend rule drive Net hours and Normal/Overtime classification (192-hr benchmark).</p>
+    </div>
+    <button class="btn btn-primary" data-master-add data-title="Add Duty Timing"><i class="fa-solid fa-plus me-2"></i>Add Profile</button>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable.</div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Name</th><th>Start</th><th>End</th><th class="text-num">Lunch</th><th>Weekend Days</th><th class="text-num">Benchmark</th><th>Status</th><th style="width:160px"></th></tr></thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="8" class="grid-empty">No duty-timing profiles defined.</td></tr>
+                }
+                else
+                {
+                    @foreach (var d in Model.Items)
+                    {
+                        var active = (d.ACTIVE_YN ?? "Y") == "Y";
+                        <tr class="@(active ? "" : "text-muted")">
+                            <td class="fw-semibold">@d.DT_NAME</td>
+                            <td>@d.DT_START</td>
+                            <td>@d.DT_END</td>
+                            <td class="text-num">@d.DT_LUNCH_HOURS.ToString("N2")</td>
+                            <td>@d.DT_WEEKEND_DAYS</td>
+                            <td class="text-num">@(d.DT_MONTHLY_BENCHMARK?.ToString("N0"))</td>
+                            <td>
+                                @if (active) { <span class="badge-soft badge-normal">Active</span> }
+                                else { <span class="badge-soft" style="background:#eee;color:#888">Inactive</span> }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-row="@System.Text.Json.JsonSerializer.Serialize(d)"><i class="fa-solid fa-pen"></i></button>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="id" value="@d.DT_ID" />
+                                    <input type="hidden" name="active" value="@(active ? "N" : "Y")" />
+                                    <button class="btn btn-sm @(active ? "btn-outline-danger" : "btn-outline-success")">
+                                        <i class="fa-solid @(active ? "fa-ban" : "fa-check")"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" asp-page-handler="Save" id="masterForm" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterModalTitle">Add Duty Timing</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="IsEdit" value="false" />
+                <input type="hidden" name="Input.DT_ID" data-default="0" />
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label class="form-label">Profile Name</label>
+                        <input name="Input.DT_NAME" class="form-control" maxlength="50" placeholder="e.g. Standard" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Duty Start <span class="req">*</span></label>
+                        <input name="Input.DT_START" type="time" class="form-control" required data-default="08:00" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Duty End <span class="req">*</span></label>
+                        <input name="Input.DT_END" type="time" class="form-control" required data-default="17:00" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Lunch (hrs)</label>
+                        <input name="Input.DT_LUNCH_HOURS" type="number" step="0.25" min="0" class="form-control" data-default="0.5" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Weekend Days</label>
+                        <input name="Input.DT_WEEKEND_DAYS" class="form-control" data-default="Friday,Saturday" placeholder="Friday,Saturday" />
+                        <div class="form-text">Comma-separated day names treated as overtime.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Monthly Benchmark</label>
+                        <input name="Input.DT_MONTHLY_BENCHMARK" type="number" step="1" min="0" class="form-control" data-default="192" />
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Status</label>
+                        <select name="Input.ACTIVE_YN" class="form-select" data-default="Y">
+                            <option value="Y">Active</option>
+                            <option value="N">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/masters.js" asp-append-version="true"></script>
+}

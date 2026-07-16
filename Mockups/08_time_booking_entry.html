@@ -1,0 +1,108 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Booking Posting – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a class="active">Transactions ▾</a><a>Reports ▾</a><a>Masters ▾</a><a>Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a class="active" href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Time Booking Posting</h1>
+  <p class="page-sub">The core transaction. Book technician time against a Work Order at <b>Task</b> level. The system auto-fills Customer, Equipment, Industry &amp; Location from the Job, fetches each Task's Standard Hours, classifies Normal/Overtime, picks the rate and computes labour cost. Each booking line is keyed by <b>Job No + Task</b>.</p>
+
+  <div class="section-h">Work Order Header</div>
+  <table class="frm">
+    <tr><td class="lbl">Time Sheet No <span class="req">*</span></td>
+        <td><input type="text" class="auto short" value="Auto Generated" disabled></td>
+        <td class="lbl2">Posting Date <span class="req">*</span></td><td><input type="date" class="short" value="2026-06-05"></td></tr>
+    <tr><td class="lbl">Job No / Work Order <span class="req">*</span></td>
+        <td><span class="with-icon"><input type="text" class="mid" value="JOB-2026-00471"><span class="field-icon">⤢</span></span></td>
+        <td class="lbl2">Equipment <span class="calc-badge">auto</span></td>
+        <td><input type="text" class="mid auto" value="Allison · 4000 · S-X42 · Transmission" disabled><span class="hint">Mfr · Model · Series · Component</span></td></tr>
+    <tr><td class="lbl">Customer <span class="calc-badge">auto</span></td>
+        <td><input type="text" class="mid auto" value="C-1042 · Petro Gulf Energy LLC" disabled></td>
+        <td class="lbl2">Industry <span class="calc-badge">auto</span></td>
+        <td><input type="text" class="short auto" value="OG · Oil &amp; Gas" disabled></td></tr>
+    <tr><td class="lbl">Work / Labour Type <span class="req">*</span></td>
+        <td><select class="mid"><option selected>Repair – Revenue (Chargeable)</option><option>Warranty</option><option>Non-Chargeable – Training</option><option>Idle / Loss Time</option></select></td>
+        <td class="lbl2">Job Location <span class="req">*</span></td>
+        <td><select class="short"><option selected>Field</option><option>Workshop</option><option>Service</option></select></td></tr>
+    <tr><td class="lbl">Job Status <span class="req">*</span></td>
+        <td><select class="short"><option selected>In Progress</option><option>Completed</option><option>On Hold</option></select><span class="hint">drives WIP</span></td></tr>
+  </table>
+
+  <div class="section-h">Time Lines — booked per Task</div>
+  <table class="grid">
+    <thead><tr>
+      <th>#</th><th>Task</th><th class="num">Task Std Hrs</th><th>Technician</th><th>Skill</th>
+      <th>Start Date-Time</th><th>End Date-Time</th><th class="num">Lunch</th>
+      <th class="num">Net Hrs</th><th>Time Type</th>
+      <th class="num">Rate</th><th class="num">Labour Cost</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td><td>Disassemble</td><td class="num">16.00</td><td>E-211 · Sami A.</td><td>Assistant</td>
+        <td>05-Jun 08:00</td><td>05-Jun 16:30</td><td class="num">0.50</td>
+        <td class="num">8.00</td><td><span class="badge blue">Normal</span></td>
+        <td class="num">15.00</td><td class="num">120.00</td></tr>
+      <tr>
+        <td>2</td><td>Assemble</td><td class="num">19.00</td><td>E-204 · Rajesh K.</td><td>Lead Hand</td>
+        <td>05-Jun 08:00</td><td>05-Jun 17:00</td><td class="num">0.50</td>
+        <td class="num">8.50</td><td><span class="badge blue">Normal</span></td>
+        <td class="num">15.00</td><td class="num">127.50</td></tr>
+      <tr>
+        <td>3</td><td>Testing</td><td class="num">8.00</td><td>E-204 · Rajesh K.</td><td>Lead Hand</td>
+        <td>05-Jun 18:00</td><td>05-Jun 21:00</td><td class="num">0.00</td>
+        <td class="num">3.00</td><td><span class="badge amber">Overtime</span></td>
+        <td class="num">22.50</td><td class="num">67.50</td></tr>
+      <tr>
+        <td colspan="12" style="background:#fafdff;">
+          <span class="with-icon"><select class="short"><option>+ Add Task…</option><option>Disassemble</option><option>Assemble</option><option>Testing</option><option>Cleaning &amp; Reusability</option></select></span>
+          &nbsp;<select class="short"><option>Technician…</option><option>E-204 · Rajesh K.</option><option>E-211 · Sami A.</option><option>E-230 · Imran H.</option></select>
+          &nbsp;<input type="datetime-local" class="short" style="max-width:175px;">
+          &nbsp;<input type="datetime-local" class="short" style="max-width:175px;">
+          &nbsp;<button class="btn btn-add" style="padding:5px 12px;">Add Line</button>
+          <span class="hint">Task Std Hrs, Net Hrs, Time Type, Rate &amp; Cost auto-fill on save</span>
+        </td></tr>
+    </tbody>
+    <tfoot>
+      <tr class="grid-foot"><td colspan="8">Total</td><td class="num">19.50</td><td>—</td><td>—</td><td class="num">315.00</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="section-h">Summary</div>
+  <div class="kpi-wrap">
+    <div class="kpi"><div class="k-val">19.50</div><div class="k-lbl">Net Labour Hours</div></div>
+    <div class="kpi"><div class="k-val">16.50 / 3.00</div><div class="k-lbl">Normal / Overtime Hrs</div></div>
+    <div class="kpi good"><div class="k-val">$315.00</div><div class="k-lbl">Total Labour Cost (→ Job)</div></div>
+    <div class="kpi warn"><div class="k-val">43.0 hrs</div><div class="k-lbl">Task Standard Hrs (sum)</div></div>
+  </div>
+
+  <div class="note">
+    <b>Task level &amp; auto-calculations:</b>
+    One Work Order → one-to-many Tasks; time is booked per Task and keyed as <b>Job No + Task</b>.
+    Task Standard Hours are fetched by <b>Manufacturer · Model · Series · Component · Task</b>. &nbsp;
+    Net Hrs = (End − Start) − Lunch &nbsp;|&nbsp; Time Type = Overtime if before/after duty timings or weekend &nbsp;|&nbsp;
+    Rate = Labour Rate Master (Location × Industry × Time Type) &nbsp;|&nbsp; Labour Cost = Net Hrs × Rate. &nbsp;
+    Posts to Finance — <b>Job Code → FITD_TA_CODE1</b>, <b>Technician Code → FITD_TA_CODE2</b> (line carries the Task).
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-save">Save / Post</button><button class="btn btn-del">Delete</button>
+    <button class="btn btn-clear">Clear</button><button class="btn btn-report">Report</button>
+  </div>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>

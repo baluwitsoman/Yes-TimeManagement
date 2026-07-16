@@ -1,0 +1,93 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technician Performance Dashboard – YES ERP</title>
+<link rel="stylesheet" href="css/erp.css">
+<style>
+ .dash{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+ .panel{ border:1px solid #e0e6ea; border-radius:5px; padding:14px 16px; background:#fff;}
+ .panel h4{ margin:0 0 10px; color:#2b7fb5; font-size:14px;}
+ .hbar{ display:flex; align-items:center; gap:10px; margin:7px 0; font-size:12px;}
+ .hbar .lab{ width:130px; color:#444;}
+ .hbar .track{ flex:1; background:#eef3f6; border-radius:3px; height:18px; overflow:hidden;}
+ .hbar .fill{ height:100%; background:#2f9bd4; }
+ .hbar .val{ width:54px; text-align:right; color:#444;}
+ @media(max-width:900px){ .dash{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="erp-header"><h1>Yellow Equipment Services LLC</h1><span class="welcome">Welcome, Admin ▾</span></div>
+<div class="erp-menu"><a>Transactions ▾</a><a class="active">Reports ▾</a><a>Masters ▾</a><a>Time Management ▾</a>
+  <span class="spacer"></span><span class="pill">Switch Role ▾</span><span class="pill">Language ▾</span></div>
+<div class="mod-nav"><span class="lbl">Module:</span>
+  <a href="index.html">Home</a><a href="01_work_type_master.html">1·Work Type</a>
+  <a href="02_industry_master.html">2·Industry</a><a href="03_customer_industry_mapping.html">3·Cust→Industry</a>
+  <a href="04_labour_rate_master.html">4·Labour Rate</a><a href="05_duty_timing_master.html">5·Duty Timing</a>
+  <a href="06_task_master.html">6·Task</a><a href="07_task_standard_hours.html">7·Task Std Hrs</a>
+  <a href="08_time_booking_entry.html">8·Time Booking</a>
+  <a href="09_technician_efficiency_report.html">9·Efficiency</a>
+  <a class="active" href="10_performance_dashboard.html">10·Dashboard</a>
+</div>
+
+<div class="page"><div class="card">
+  <h1 class="page-title"><span class="ico">❄</span> Technician Performance Dashboard &amp; Executive KPI <span class="badge green" style="font-size:12px;">Phase 1</span></h1>
+  <p class="page-sub">Executive view for Service Operations — utilisation, efficiency, overtime trend and segment margin, synthesised from time bookings (the "pivot-table" diagnostic view).</p>
+
+  <table class="frm">
+    <tr><td class="lbl">Period</td><td><select class="short"><option selected>Jun-2026</option><option>Q2-2026</option></select></td>
+        <td class="lbl2">Segment</td><td><select class="short"><option selected>All</option><option>OG</option><option>GC</option></select></td>
+        <td><button class="btn btn-add" style="margin-left:10px;">Refresh</button></td></tr>
+  </table>
+
+  <div class="kpi-wrap">
+    <div class="kpi good"><div class="k-val">88%</div><div class="k-lbl">Workshop Utilisation</div></div>
+    <div class="kpi"><div class="k-val">94%</div><div class="k-lbl">Labour Efficiency</div></div>
+    <div class="kpi good"><div class="k-val">82%</div><div class="k-lbl">Chargeable Ratio</div></div>
+    <div class="kpi warn"><div class="k-val">9.5%</div><div class="k-lbl">Overtime %</div></div>
+    <div class="kpi bad"><div class="k-val">62 hrs</div><div class="k-lbl">Loss / Idle Time</div></div>
+  </div>
+
+  <div class="dash">
+    <div class="panel">
+      <h4>Technician Utilisation vs 192-hr Target</h4>
+      <div class="hbar"><span class="lab">Rajesh K.</span><span class="track"><span class="fill" style="width:100%;background:#5cb85c;"></span></span><span class="val">102%</span></div>
+      <div class="hbar"><span class="lab">Joseph M.</span><span class="track"><span class="fill" style="width:98%;background:#5cb85c;"></span></span><span class="val">98%</span></div>
+      <div class="hbar"><span class="lab">Sami A.</span><span class="track"><span class="fill" style="width:89%;background:#e0922f;"></span></span><span class="val">89%</span></div>
+      <div class="hbar"><span class="lab">Imran H.</span><span class="track"><span class="fill" style="width:82%;background:#c0504d;"></span></span><span class="val">82%</span></div>
+    </div>
+
+    <div class="panel">
+      <h4>Segment Performance — Location × Industry (Margin %)</h4>
+      <div class="hbar"><span class="lab">Field · OG</span><span class="track"><span class="fill" style="width:78%;"></span></span><span class="val">38%</span></div>
+      <div class="hbar"><span class="lab">Workshop · OG</span><span class="track"><span class="fill" style="width:62%;"></span></span><span class="val">31%</span></div>
+      <div class="hbar"><span class="lab">Field · GC</span><span class="track"><span class="fill" style="width:70%;"></span></span><span class="val">34%</span></div>
+      <div class="hbar"><span class="lab">Workshop · GC</span><span class="track"><span class="fill" style="width:54%;"></span></span><span class="val">27%</span></div>
+    </div>
+
+    <div class="panel">
+      <h4>Chargeable vs Non-Chargeable Hours</h4>
+      <div class="hbar"><span class="lab">Chargeable</span><span class="track"><span class="fill" style="width:82%;background:#5cb85c;"></span></span><span class="val">613</span></div>
+      <div class="hbar"><span class="lab">Non-Chargeable</span><span class="track"><span class="fill" style="width:6%;background:#e0922f;"></span></span><span class="val">45</span></div>
+      <div class="hbar"><span class="lab">Overtime</span><span class="track"><span class="fill" style="width:5%;background:#2f9bd4;"></span></span><span class="val">34</span></div>
+      <div class="hbar"><span class="lab">Loss / Idle</span><span class="track"><span class="fill" style="width:8%;background:#c0504d;"></span></span><span class="val">62</span></div>
+    </div>
+
+    <div class="panel">
+      <h4>WIP — Unbilled Labour (Job Status = In Progress)</h4>
+      <table class="grid" style="margin-top:2px;">
+        <thead><tr><th>Job No</th><th>Customer</th><th class="num">Hrs</th><th class="num">Labour $</th></tr></thead>
+        <tbody>
+          <tr><td>JOB-2026-00471</td><td>Petro Gulf</td><td class="num">36.5</td><td class="num">612</td></tr>
+          <tr><td>JOB-2026-00488</td><td>Al Sahra</td><td class="num">22.0</td><td class="num">264</td></tr>
+          <tr><td>JOB-2026-00501</td><td>Desert Drilling</td><td class="num">14.5</td><td class="num">218</td></tr>
+        </tbody>
+        <tfoot><tr class="grid-foot"><td colspan="2">Total WIP</td><td class="num">73.0</td><td class="num">1,094</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="note"><b>Phase 2 preview:</b> once Fixed-Price and Time-&amp;-Material billing is added, these labour hours convert directly into invoiced revenue, completing the Job P&amp;L (Material + Labour + Expense vs Revenue).</div>
+</div></div>
+<div class="footer-note">WisdomIT · YES ERP · Technician Time Management Module — Mock-up · ASP.NET 4.8 Web Forms / Oracle</div>
+</body></html>
