@@ -43,8 +43,10 @@ public class LoginModel : PageModel
         public string Password { get; set; } = string.Empty;
     }
 
-    public void OnGet()
+    public void OnGet(string? error = null)
     {
+        if (error == "autologin")
+            ErrorMessage = "Your single sign-on link has expired or was already used. Please sign in.";
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken ct)
