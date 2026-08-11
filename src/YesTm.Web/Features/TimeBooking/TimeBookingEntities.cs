@@ -28,6 +28,8 @@ public sealed class TM_TIME_SHEET
     public string? TS_ACTIVE_YN { get; set; }
     public decimal? TS_CREATION_USER_ID { get; set; }
     public DateTime? TS_CREATION_DATE { get; set; }
+    public decimal? TS_UPDATE_USER_ID { get; set; }
+    public DateTime? TS_UPDATE_DATE { get; set; }
 }
 
 /// <summary>New table TM_TIME_LINE — one bookable line per Task (key = Job No + Task).</summary>
@@ -112,4 +114,30 @@ public sealed class TimeSheetListItem
     public string? TS_JOB_STATUS { get; set; }
     public decimal TS_TOTAL_NET_HOURS { get; set; }
     public decimal TS_TOTAL_LABOUR_COST { get; set; }
+    public int TOTAL_ROWS { get; set; }   // COUNT(*) OVER() — same on every row of the page
+}
+
+/// <summary>Generic paged result: the page's items plus the total row count across all pages.</summary>
+public sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount);
+
+/// <summary>Header + lines pulled back to re-open a posted time sheet for editing.</summary>
+public sealed class TimeSheetEditDto
+{
+    public decimal TS_ID { get; set; }
+    public string? TS_SHEET_NO { get; set; }
+    public DateTime TS_POSTING_DATE { get; set; }
+    public string? TS_JOB_CODE { get; set; }
+    public string? TS_CUSTOMER_CODE { get; set; }
+    public string? TS_CUSTOMER_NAME { get; set; }
+    public string? TS_INDUSTRY_CODE { get; set; }
+    public string? TS_BRAND { get; set; }
+    public string? TS_EQUIPMENT_TYPE { get; set; }
+    public string? TS_SERVICE_TYPE { get; set; }
+    public string? TS_SERIAL_NO { get; set; }
+    public DateTime? TS_JOB_OPENING_DATE { get; set; }
+    public string? TS_LOCATION { get; set; }
+    public string? TS_WORK_TYPE_CODE { get; set; }
+    public string? TS_JOB_STATUS { get; set; }
+    public string? TS_REMARKS { get; set; }
+    public List<TM_TIME_LINE> Lines { get; set; } = [];
 }

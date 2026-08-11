@@ -20,10 +20,63 @@
             setVal("openingDate", o.getAttribute("data-opening"));
             var loc = o.getAttribute("data-location");
             if (loc) setVal("location", loc);
+            updateSelectedJobCode();
         });
     }
 
     function setVal(id, v) { var el = document.getElementById(id); if (el) el.value = v || ""; }
+
+    function updateSelectedJobCode() { setVal("selectedJobCode", jobSelect ? jobSelect.value : ""); }
+
+    function clearHeaderAutofill() {
+        ["customerName", "customerCode", "industryCode", "brand", "equipType",
+         "serviceType", "serialNo", "openingDate"].forEach(function (id) { setVal(id, ""); });
+    }
+
+    // ---- Filter the Job dropdown by Job Location (server-side via AJAX; "All" = no filter) ----
+    // Disabled in edit mode (the select carries the `disabled` attribute), so no listener is wired then.
+    var jobLocFilter = document.getElementById("jobLocFilter");
+    if (jobLocFilter && jobSelect && !jobLocFilter.disabled) {
+        jobLocFilter.addEventListener("change", function () {
+            var loc = jobLocFilter.value;
+            var base = window.TM_JOBS_BY_LOCATION_URL || (window.location.pathname + "?handler=JobsByLocation");
+            var url = base + (base.indexOf("?") === -1 ? "?" : "&") + "location=" + encodeURIComponent(loc);
+            jobLocFilter.disabled = true;
+            fetch(url, { credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } })
+                .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+                .then(function (jobs) { rebuildJobs(jobs); })
+                .catch(function () { /* leave the current list in place on failure */ })
+                .finally(function () { jobLocFilter.disabled = false; });
+        });
+    }
+
+    // Rebuild the Job / Work Order options from the AJAX payload, keeping the current
+    // selection when the job survives the filter (else reset it and clear the auto-fill).
+    function rebuildJobs(jobs) {
+        var current = jobSelect.value;
+        jobSelect.innerHTML = "";
+        var ph = document.createElement("option");
+        ph.value = ""; ph.textContent = "— Select Job —";
+        jobSelect.appendChild(ph);
+        (jobs || []).forEach(function (j) {
+            var o = document.createElement("option");
+            o.value = j.code;
+            o.textContent = j.code + " — " + (j.desc || "");
+            o.setAttribute("data-customer-code", j.customerCode || "");
+            o.setAttribute("data-customer-name", j.customerName || "");
+            o.setAttribute("data-industry", j.industry || "");
+            o.setAttribute("data-location", j.location || "");
+            o.setAttribute("data-brand", j.brand || "");
+            o.setAttribute("data-equip-type", j.equipType || "");
+            o.setAttribute("data-service-type", j.serviceType || "");
+            o.setAttribute("data-serial", j.serial || "");
+            o.setAttribute("data-opening", j.opening || "");
+            jobSelect.appendChild(o);
+        });
+        jobSelect.value = current;
+        if (jobSelect.value !== current) { jobSelect.value = ""; clearHeaderAutofill(); }
+        updateSelectedJobCode();
+    }
 
     // ---- Time helpers ----
     function parseHM(s) { var p = (s || "0:0").split(":"); return { h: +p[0] || 0, m: +p[1] || 0 }; }
@@ -167,4 +220,30 @@
         return String(s == null ? "" : s)
             .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
+
+    // ---- Seed the grid from an existing sheet's lines (edit mode) ----
+    if (Array.isArray(window.TM_EXISTING_LINES) && window.TM_EXISTING_LINES.length) {
+        window.TM_EXISTING_LINES.forEach(function (x) {
+            var start = new Date(x.startRaw), end = new Date(x.endRaw);
+            lines.push({
+                taskCode: x.taskCode,
+                taskName: x.taskName,
+                stdHours: parseFloat(x.stdHours) || 0,
+                techCode: x.techCode,
+                techName: x.techName,
+                skill: x.skill,
+                start: start,
+                end: end,
+                startRaw: x.startRaw,
+                endRaw: x.endRaw,
+                lunch: parseFloat(x.lunch) || 0,
+                net: computeNet(start, end, x.lunch) || 0,
+                timeType: classify(start, end)
+            });
+        });
+        render();
+    }
+
+    // Initialise the "Selected Job Code" display for the pre-selected job (edit mode / postback).
+    updateSelectedJobCode();
 })();

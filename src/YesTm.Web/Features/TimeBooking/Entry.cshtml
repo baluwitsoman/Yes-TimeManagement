@@ -6,7 +6,8 @@
 
 <div class="page-head">
     <div>
-        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-clock"></i></span> Time Booking Posting</h1>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-clock"></i></span>
+            @(Model.IsEditMode ? $"Edit Time Sheet {Model.SheetNo}" : "Time Booking Posting")</h1>
         <p class="page-sub">Book technician time against a Work Order at <strong>Task</strong> level. Net hours, Normal/Overtime, rate and labour cost are computed on post. Each line is keyed by <strong>Job No + Task</strong>.</p>
     </div>
     <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Time Sheets</a>
@@ -22,6 +23,32 @@
 
 <form method="post" id="timeBookingForm">
     <div asp-validation-summary="All" class="alert alert-danger py-2" id="serverErrors"></div>
+    <input asp-for="TsId" type="hidden" />
+
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-filter"></i> Find Job / Work Order</div>
+        <div class="row g-3 mb-1">
+            <div class="col-md-4">
+                <label class="form-label">Filter Jobs by Location</label>
+                <select id="jobLocFilter" class="form-select" @(Model.IsEditMode ? "disabled" : "")
+                        title="@(Model.IsEditMode ? "Location filter is only available when creating a new time sheet." : "Filter the Job / Work Order list by location.")">
+                    <option value="">All Locations</option>
+                    @foreach (var loc in Model.Locations)
+                    {
+                        <option value="@loc.CODE">@loc.NAME</option>
+                    }
+                </select>
+                @if (Model.IsEditMode)
+                {
+                    <span class="text-muted small"><i class="fa-regular fa-circle-question me-1"></i>Disabled while editing a posted sheet.</span>
+                }
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Selected Job Code <span class="badge-soft badge-status">auto</span></label>
+                <input id="selectedJobCode" class="form-control field-auto" readonly value="@Model.Header.JobCode" />
+            </div>
+        </div>
+    </div>
 
     <div class="content-card">
         <div class="section-h"><i class="fa-solid fa-file-lines"></i> Work Order Header</div>
@@ -183,8 +210,16 @@
     </div>
 
     <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save / Post</button>
-        <a asp-page="/TimeBooking/Entry" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate-left me-2"></i>Clear</a>
+        <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk me-2"></i>@(Model.IsEditMode ? "Update Time Sheet" : "Save / Post")</button>
+        <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate-left me-2"></i>Cancel</a>
+        @if (Model.IsEditMode && Model.IsAdmin)
+        {
+            <button type="submit" asp-page-handler="Void" asp-route-tsId="@Model.TsId"
+                    class="btn btn-outline-danger ms-auto" formnovalidate
+                    onclick="return confirm('Void this time sheet? It will be removed from the active list.');">
+                <i class="fa-solid fa-ban me-2"></i>Void Time Sheet</button>
+        }
     </div>
 </form>
 
@@ -265,6 +300,31 @@
                         .Select(d => Enum.TryParse<DayOfWeek>(d, true, out var dow) ? ((int)dow).ToString() : null)
                         .Where(x => x != null)))]
         };
+        // Endpoint used to re-fetch the Job / Work Order list filtered by Job Location (create mode).
+        window.TM_JOBS_BY_LOCATION_URL = "@Html.Raw(Url.Page(null, "JobsByLocation"))";
+        // Seed the grid with the sheet's existing task lines when editing a posted time sheet.
+        window.TM_EXISTING_LINES = [
+            @foreach (var l in Model.ExistingLines)
+            {
+                @:{
+                @:  taskCode: "@Html.Raw(Javascript(l.TaskCode))",
+                @:  taskName: "@Html.Raw(Javascript(l.TaskName))",
+                @:  stdHours: @l.StdHours.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                @:  techCode: "@Html.Raw(Javascript(l.TechCode))",
+                @:  techName: "@Html.Raw(Javascript(l.TechName))",
+                @:  skill: "@Html.Raw(Javascript(l.Skill))",
+                @:  startRaw: "@l.StartDt.ToString("yyyy-MM-ddTHH:mm")",
+                @:  endRaw: "@l.EndDt.ToString("yyyy-MM-ddTHH:mm")",
+                @:  lunch: @l.LunchHours.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                @:},
+            }
+        ];
     </script>
     <script src="~/js/time-booking.js" asp-append-version="true"></script>
+}
+
+@functions {
+    // Minimal JS-string escaper for values embedded in the inline TM_EXISTING_LINES literal.
+    static string Javascript(string? s) => string.IsNullOrEmpty(s) ? "" :
+        s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "\\n");
 }

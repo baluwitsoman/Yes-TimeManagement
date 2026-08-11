@@ -8,8 +8,10 @@ public sealed record LabourRateResult(decimal Rate, decimal OvertimeMultiplier);
 
 public interface ITimeBookingRepository
 {
-    Task<IReadOnlyList<TimeSheetListItem>> GetRecentTimeSheetsAsync(decimal? scopeUserId, int take, CancellationToken ct = default);
-    Task<IReadOnlyList<JobLookup>> GetJobsAsync(CancellationToken ct = default);
+    Task<PagedResult<TimeSheetListItem>> GetTimeSheetsAsync(decimal? scopeUserId, string? search,
+        DateTime? dateFrom, DateTime? dateTo, int page, int pageSize, CancellationToken ct = default);
+    Task<TimeSheetEditDto?> GetTimeSheetForEditAsync(decimal tsId, CancellationToken ct = default);
+    Task<IReadOnlyList<JobLookup>> GetJobsAsync(string? location, CancellationToken ct = default);
     Task<JobLookup?> GetJobAsync(string jobCode, CancellationToken ct = default);
     Task<IReadOnlyList<TechnicianLookup>> GetTechniciansAsync(CancellationToken ct = default);
     Task<IReadOnlyList<TaskLookup>> GetTasksAsync(CancellationToken ct = default);
@@ -18,6 +20,8 @@ public interface ITimeBookingRepository
     Task<decimal> GetTaskStdHoursAsync(string taskCode, CancellationToken ct = default);
     Task<LabourRateResult> GetLabourRateAsync(string? location, string? industryCode, CancellationToken ct = default);
     Task<string> SaveTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, CancellationToken ct = default);
+    Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default);
+    Task VoidTimeSheetAsync(decimal tsId, decimal? userId, CancellationToken ct = default);
 }
 
 public sealed class TimeBookingRepository : ITimeBookingRepository
@@ -31,22 +35,76 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<TimeSheetListItem>> GetRecentTimeSheetsAsync(decimal? scopeUserId, int take, CancellationToken ct = default)
+    public async Task<PagedResult<TimeSheetListItem>> GetTimeSheetsAsync(decimal? scopeUserId, string? search,
+        DateTime? dateFrom, DateTime? dateTo, int page, int pageSize, CancellationToken ct = default)
     {
-        var sql = @"
-            SELECT * FROM (
-                SELECT TS_ID, TS_SHEET_NO, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_NAME,
-                       TS_LOCATION, TS_JOB_STATUS, TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST
-                FROM   TM_TIME_SHEET
-                WHERE  NVL(TS_ACTIVE_YN,'Y') = 'Y'
-                  AND  (:scopeUserId IS NULL OR TS_CREATION_USER_ID = :scopeUserId)
-                ORDER  BY TS_POSTING_DATE DESC, TS_ID DESC
-            ) WHERE ROWNUM <= :take";
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        var offset = (page - 1) * pageSize;
+        var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        // Exclusive upper bound = the day after dateTo at midnight, so the whole "to" day is
+        // included even though TS_POSTING_DATE carries a time component. Computed here (not as
+        // ":dateTo + 1" in SQL) because arithmetic on an untyped NULL bind trips ORA-00932.
+        var dateToExcl = dateTo?.Date.AddDays(1);
+
+        // COUNT(*) OVER() gives the full match count on every row so one round-trip does
+        // both paging and the total needed for the pager.
+        const string sql = @"
+            SELECT TS_ID, TS_SHEET_NO, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_NAME,
+                   TS_LOCATION, TS_JOB_STATUS, TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST,
+                   COUNT(*) OVER() AS TOTAL_ROWS
+            FROM   TM_TIME_SHEET
+            WHERE  NVL(TS_ACTIVE_YN,'Y') = 'Y'
+              AND  (:scopeUserId IS NULL OR TS_CREATION_USER_ID = :scopeUserId)
+              AND  (:term IS NULL
+                    OR UPPER(TS_SHEET_NO)      LIKE '%' || UPPER(:term) || '%'
+                    OR UPPER(TS_JOB_CODE)      LIKE '%' || UPPER(:term) || '%'
+                    OR UPPER(TS_CUSTOMER_NAME) LIKE '%' || UPPER(:term) || '%')
+              AND  (:dateFrom   IS NULL OR TS_POSTING_DATE >= :dateFrom)
+              AND  (:dateToExcl IS NULL OR TS_POSTING_DATE <  :dateToExcl)
+            ORDER  BY TS_POSTING_DATE DESC, TS_ID DESC
+            OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY";
+
+        // Explicit DbType on the nullable date binds so Oracle sees a DATE-typed parameter even
+        // when the value is NULL (an untyped NULL bind would otherwise cause ORA-00932).
+        var p = new DynamicParameters();
+        p.Add("scopeUserId", scopeUserId, DbType.Decimal);
+        p.Add("term", term, DbType.String);
+        p.Add("dateFrom", dateFrom, DbType.Date);
+        p.Add("dateToExcl", dateToExcl, DbType.Date);
+        p.Add("offset", offset, DbType.Int32);
+        p.Add("pageSize", pageSize, DbType.Int32);
 
         using var conn = await _db.CreateOpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<TimeSheetListItem>(
-            new CommandDefinition(sql, new { scopeUserId, take }, cancellationToken: ct));
-        return rows.AsList();
+        var rows = (await conn.QueryAsync<TimeSheetListItem>(new CommandDefinition(
+            sql, p, cancellationToken: ct))).AsList();
+        var total = rows.Count > 0 ? rows[0].TOTAL_ROWS : 0;
+        return new PagedResult<TimeSheetListItem>(rows, total);
+    }
+
+    public async Task<TimeSheetEditDto?> GetTimeSheetForEditAsync(decimal tsId, CancellationToken ct = default)
+    {
+        const string headerSql = @"
+            SELECT TS_ID, TS_SHEET_NO, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_CODE, TS_CUSTOMER_NAME,
+                   TS_INDUSTRY_CODE, TS_BRAND, TS_EQUIPMENT_TYPE, TS_SERVICE_TYPE, TS_SERIAL_NO,
+                   TS_JOB_OPENING_DATE, TS_LOCATION, TS_WORK_TYPE_CODE, TS_JOB_STATUS, TS_REMARKS
+            FROM   TM_TIME_SHEET
+            WHERE  TS_ID = :tsId AND NVL(TS_ACTIVE_YN,'Y') = 'Y'";
+        const string linesSql = @"
+            SELECT TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
+                   TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
+                   TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE
+            FROM   TM_TIME_LINE
+            WHERE  TL_TS_ID = :tsId
+            ORDER  BY TL_LINE_NO";
+
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        var header = await conn.QueryFirstOrDefaultAsync<TimeSheetEditDto>(
+            new CommandDefinition(headerSql, new { tsId }, cancellationToken: ct));
+        if (header is null) return null;
+        header.Lines = (await conn.QueryAsync<TM_TIME_LINE>(
+            new CommandDefinition(linesSql, new { tsId }, cancellationToken: ct))).AsList();
+        return header;
     }
 
     // Job header + customer + mapped industry + equipment details (brand, type,
@@ -72,14 +130,15 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         LEFT JOIN MMM_COMMON_MASTERS_DETAIL b
                ON UPPER(b.MCMD_ENTITY_GROUP) = 'AGENCY' AND b.MCMD_ENTITY_CODE = j.MTJ_BRAND";
 
-    public async Task<IReadOnlyList<JobLookup>> GetJobsAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<JobLookup>> GetJobsAsync(string? location, CancellationToken ct = default)
     {
         var sql = JobSelectBase + @"
             WHERE NVL(j.MTJ_JOB_STATUS,'OPEN') <> 'CLOSED'
+              AND (:location IS NULL OR j.MTJ_JOB_LOCATION = :location)
             ORDER BY j.MTJ_JOB_OPENING_DATE DESC NULLS LAST, j.MTJ_JOB_CODE";
 
         using var conn = await _db.CreateOpenConnectionAsync(ct);
-        var rows = await conn.QueryAsync<JobLookup>(new CommandDefinition(sql, cancellationToken: ct));
+        var rows = await conn.QueryAsync<JobLookup>(new CommandDefinition(sql, new { location }, cancellationToken: ct));
         return rows.AsList();
     }
 
@@ -227,5 +286,69 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             _logger.LogError(ex, "Failed to post time sheet for job {JobCode}", header.TS_JOB_CODE);
             throw;
         }
+    }
+
+    public async Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            header.TS_UPDATE_USER_ID = userId;
+
+            const string updHeader = @"
+                UPDATE TM_TIME_SHEET SET
+                    TS_POSTING_DATE = :TS_POSTING_DATE, TS_JOB_CODE = :TS_JOB_CODE,
+                    TS_CUSTOMER_CODE = :TS_CUSTOMER_CODE, TS_CUSTOMER_NAME = :TS_CUSTOMER_NAME,
+                    TS_EQUIPMENT = :TS_EQUIPMENT, TS_INDUSTRY_CODE = :TS_INDUSTRY_CODE,
+                    TS_LOCATION = :TS_LOCATION, TS_WORK_TYPE_CODE = :TS_WORK_TYPE_CODE, TS_JOB_STATUS = :TS_JOB_STATUS,
+                    TS_BRAND = :TS_BRAND, TS_EQUIPMENT_TYPE = :TS_EQUIPMENT_TYPE, TS_SERVICE_TYPE = :TS_SERVICE_TYPE,
+                    TS_SERIAL_NO = :TS_SERIAL_NO, TS_JOB_OPENING_DATE = :TS_JOB_OPENING_DATE,
+                    TS_TOTAL_NET_HOURS = :TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST = :TS_TOTAL_LABOUR_COST,
+                    TS_NORMAL_HOURS = :TS_NORMAL_HOURS, TS_OT_HOURS = :TS_OT_HOURS, TS_STD_HOURS = :TS_STD_HOURS,
+                    TS_REMARKS = :TS_REMARKS, TS_UPDATE_USER_ID = :TS_UPDATE_USER_ID, TS_UPDATE_DATE = SYSDATE
+                WHERE TS_ID = :TS_ID";
+            var affected = await conn.ExecuteAsync(new CommandDefinition(updHeader, header, tx, cancellationToken: ct));
+            if (affected == 0)
+                throw new InvalidOperationException($"Time sheet {header.TS_ID} not found for update.");
+
+            await conn.ExecuteAsync(new CommandDefinition(
+                "DELETE FROM TM_TIME_LINE WHERE TL_TS_ID = :id", new { id = header.TS_ID }, tx, cancellationToken: ct));
+
+            const string insLine = @"
+                INSERT INTO TM_TIME_LINE
+                    (TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
+                     TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
+                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_CREATION_DATE)
+                VALUES
+                    (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
+                     :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
+                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, SYSDATE)";
+            foreach (var line in lines)
+            {
+                line.TL_TS_ID = header.TS_ID;
+                await conn.ExecuteAsync(new CommandDefinition(insLine, line, tx, cancellationToken: ct));
+            }
+
+            tx.Commit();
+            _logger.LogInformation("Updated time sheet {SheetNo} ({TsId}) — {LineCount} line(s), cost {Cost}",
+                header.TS_SHEET_NO, header.TS_ID, lines.Count, header.TS_TOTAL_LABOUR_COST);
+        }
+        catch (Exception ex)
+        {
+            tx.Rollback();
+            _logger.LogError(ex, "Failed to update time sheet {TsId}", header.TS_ID);
+            throw;
+        }
+    }
+
+    public async Task VoidTimeSheetAsync(decimal tsId, decimal? userId, CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        await conn.ExecuteAsync(new CommandDefinition(
+            @"UPDATE TM_TIME_SHEET SET TS_ACTIVE_YN = 'N', TS_UPDATE_USER_ID = :userId, TS_UPDATE_DATE = SYSDATE
+              WHERE TS_ID = :tsId AND NVL(TS_ACTIVE_YN,'Y') = 'Y'",
+            new { tsId, userId }, cancellationToken: ct));
+        _logger.LogInformation("Voided time sheet {TsId} by user {UserId}", tsId, userId);
     }
 }

@@ -2,6 +2,8 @@
 @model YesTm.Web.Features.TimeBooking.IndexModel
 @{
     ViewData["Title"] = "Time Sheets";
+    var fromStr = Model.DateFrom?.ToString("yyyy-MM-dd");
+    var toStr = Model.DateTo?.ToString("yyyy-MM-dd");
 }
 
 <div class="page-head">
@@ -21,6 +23,25 @@
 }
 
 <div class="content-card">
+    <form method="get" class="row g-2 align-items-end mb-3">
+        <div class="col-md-4">
+            <label class="form-label">Search</label>
+            <input name="Search" value="@Model.Search" class="form-control" placeholder="Sheet no / job no / customer…" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Posting Date From</label>
+            <input name="DateFrom" type="date" value="@fromStr" class="form-control" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Posting Date To</label>
+            <input name="DateTo" type="date" value="@toStr" class="form-control" />
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-outline-primary flex-fill"><i class="fa-solid fa-magnifying-glass me-1"></i>Apply</button>
+            <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary" title="Clear filters"><i class="fa-solid fa-xmark"></i></a>
+        </div>
+    </form>
+
     <div class="table-responsive">
         <table class="table table-hover align-middle">
             <thead>
@@ -33,12 +54,16 @@
                     <th>Status</th>
                     <th class="text-num">Net Hrs</th>
                     <th class="text-num">Labour Cost</th>
+                    @if (Model.IsAdmin)
+                    {
+                        <th style="width:80px"></th>
+                    }
                 </tr>
             </thead>
             <tbody>
                 @if (Model.Sheets.Count == 0)
                 {
-                    <tr><td colspan="8" class="grid-empty">No time sheets posted yet.</td></tr>
+                    <tr><td colspan="@(Model.IsAdmin ? 9 : 8)" class="grid-empty">No time sheets found.</td></tr>
                 }
                 else
                 {
@@ -53,10 +78,51 @@
                             <td><span class="badge-soft badge-status">@s.TS_JOB_STATUS</span></td>
                             <td class="text-num">@s.TS_TOTAL_NET_HOURS.ToString("N2")</td>
                             <td class="text-num">@s.TS_TOTAL_LABOUR_COST.ToString("N2")</td>
+                            @if (Model.IsAdmin)
+                            {
+                                <td class="text-end">
+                                    <a asp-page="/TimeBooking/Entry" asp-route-tsId="@s.TS_ID"
+                                       class="btn btn-sm btn-outline-primary" title="Edit time sheet"><i class="fa-solid fa-pen"></i></a>
+                                </td>
+                            }
                         </tr>
                     }
                 }
             </tbody>
         </table>
     </div>
+
+    @if (Model.TotalCount > 0)
+    {
+        var from = (Model.PageNo - 1) * YesTm.Web.Features.TimeBooking.IndexModel.PageSize + 1;
+        var to = Math.Min(Model.PageNo * YesTm.Web.Features.TimeBooking.IndexModel.PageSize, Model.TotalCount);
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="text-muted small">Showing @from–@to of @Model.TotalCount</span>
+            @if (Model.TotalPages > 1)
+            {
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(Model.PageNo <= 1 ? "disabled" : "")">
+                            <a class="page-link" asp-page="/TimeBooking/Index"
+                               asp-route-Search="@Model.Search" asp-route-DateFrom="@fromStr" asp-route-DateTo="@toStr"
+                               asp-route-PageNo="@(Model.PageNo - 1)">Prev</a>
+                        </li>
+                        @for (var p = 1; p <= Model.TotalPages; p++)
+                        {
+                            <li class="page-item @(p == Model.PageNo ? "active" : "")">
+                                <a class="page-link" asp-page="/TimeBooking/Index"
+                                   asp-route-Search="@Model.Search" asp-route-DateFrom="@fromStr" asp-route-DateTo="@toStr"
+                                   asp-route-PageNo="@p">@p</a>
+                            </li>
+                        }
+                        <li class="page-item @(Model.PageNo >= Model.TotalPages ? "disabled" : "")">
+                            <a class="page-link" asp-page="/TimeBooking/Index"
+                               asp-route-Search="@Model.Search" asp-route-DateFrom="@fromStr" asp-route-DateTo="@toStr"
+                               asp-route-PageNo="@(Model.PageNo + 1)">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        </div>
+    }
 </div>
