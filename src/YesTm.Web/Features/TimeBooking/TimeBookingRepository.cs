@@ -8,9 +8,11 @@ public sealed record LabourRateResult(decimal Rate, decimal OvertimeMultiplier);
 
 public interface ITimeBookingRepository
 {
-    Task<PagedResult<TimeSheetListItem>> GetTimeSheetsAsync(decimal? scopeUserId, string? search,
+    Task<PagedResult<TimeSheetListItem>> GetTimeSheetsAsync(decimal? scopeUserId, string? scopeEmpCode, string? search,
         DateTime? dateFrom, DateTime? dateTo, int page, int pageSize, CancellationToken ct = default);
     Task<TimeSheetEditDto?> GetTimeSheetForEditAsync(decimal tsId, CancellationToken ct = default);
+    /// <summary>True if the user created the sheet or appears as a technician on any of its lines.</summary>
+    Task<bool> CanEditTimeSheetAsync(decimal tsId, decimal userId, string? empCode, CancellationToken ct = default);
     Task<IReadOnlyList<JobLookup>> GetJobsAsync(string? location, CancellationToken ct = default);
     Task<JobLookup?> GetJobAsync(string jobCode, CancellationToken ct = default);
     Task<IReadOnlyList<TechnicianLookup>> GetTechniciansAsync(CancellationToken ct = default);
@@ -35,13 +37,14 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         _logger = logger;
     }
 
-    public async Task<PagedResult<TimeSheetListItem>> GetTimeSheetsAsync(decimal? scopeUserId, string? search,
+    public async Task<PagedResult<TimeSheetListItem>> GetTimeSheetsAsync(decimal? scopeUserId, string? scopeEmpCode, string? search,
         DateTime? dateFrom, DateTime? dateTo, int page, int pageSize, CancellationToken ct = default)
     {
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
         var offset = (page - 1) * pageSize;
         var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        var empCode = string.IsNullOrWhiteSpace(scopeEmpCode) ? null : scopeEmpCode;
         // Exclusive upper bound = the day after dateTo at midnight, so the whole "to" day is
         // included even though TS_POSTING_DATE carries a time component. Computed here (not as
         // ":dateTo + 1" in SQL) because arithmetic on an untyped NULL bind trips ORA-00932.
@@ -55,7 +58,11 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                    COUNT(*) OVER() AS TOTAL_ROWS
             FROM   TM_TIME_SHEET
             WHERE  NVL(TS_ACTIVE_YN,'Y') = 'Y'
-              AND  (:scopeUserId IS NULL OR TS_CREATION_USER_ID = :scopeUserId)
+              AND  (:scopeUserId IS NULL
+                    OR TS_CREATION_USER_ID = :scopeUserId
+                    OR (:empCode IS NOT NULL AND EXISTS (
+                          SELECT 1 FROM TM_TIME_LINE l
+                          WHERE l.TL_TS_ID = TS_ID AND l.TL_TECH_CODE = :empCode)))
               AND  (:term IS NULL
                     OR UPPER(TS_SHEET_NO)      LIKE '%' || UPPER(:term) || '%'
                     OR UPPER(TS_JOB_CODE)      LIKE '%' || UPPER(:term) || '%'
@@ -69,6 +76,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         // when the value is NULL (an untyped NULL bind would otherwise cause ORA-00932).
         var p = new DynamicParameters();
         p.Add("scopeUserId", scopeUserId, DbType.Decimal);
+        p.Add("empCode", empCode, DbType.String);
         p.Add("term", term, DbType.String);
         p.Add("dateFrom", dateFrom, DbType.Date);
         p.Add("dateToExcl", dateToExcl, DbType.Date);
@@ -85,7 +93,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
     public async Task<TimeSheetEditDto?> GetTimeSheetForEditAsync(decimal tsId, CancellationToken ct = default)
     {
         const string headerSql = @"
-            SELECT TS_ID, TS_SHEET_NO, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_CODE, TS_CUSTOMER_NAME,
+            SELECT TS_ID, TS_SHEET_NO, TS_CREATION_USER_ID, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_CODE, TS_CUSTOMER_NAME,
                    TS_INDUSTRY_CODE, TS_BRAND, TS_EQUIPMENT_TYPE, TS_SERVICE_TYPE, TS_SERIAL_NO,
                    TS_JOB_OPENING_DATE, TS_LOCATION, TS_WORK_TYPE_CODE, TS_JOB_STATUS, TS_REMARKS
             FROM   TM_TIME_SHEET
@@ -93,7 +101,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         const string linesSql = @"
             SELECT TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
                    TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
-                   TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE
+                   TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION
             FROM   TM_TIME_LINE
             WHERE  TL_TS_ID = :tsId
             ORDER  BY TL_LINE_NO";
@@ -105,6 +113,29 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         header.Lines = (await conn.QueryAsync<TM_TIME_LINE>(
             new CommandDefinition(linesSql, new { tsId }, cancellationToken: ct))).AsList();
         return header;
+    }
+
+    public async Task<bool> CanEditTimeSheetAsync(decimal tsId, decimal userId, string? empCode, CancellationToken ct = default)
+    {
+        // Authoritative (server-side) involvement check: creator of the sheet, or a technician on any line.
+        const string sql = @"
+            SELECT CASE WHEN EXISTS (
+                       SELECT 1 FROM TM_TIME_SHEET s
+                       WHERE  s.TS_ID = :tsId AND NVL(s.TS_ACTIVE_YN,'Y') = 'Y'
+                         AND (s.TS_CREATION_USER_ID = :userId
+                              OR (:empCode IS NOT NULL AND EXISTS (
+                                    SELECT 1 FROM TM_TIME_LINE l
+                                    WHERE l.TL_TS_ID = s.TS_ID AND l.TL_TECH_CODE = :empCode)))
+                   ) THEN 1 ELSE 0 END
+            FROM DUAL";
+        var p = new DynamicParameters();
+        p.Add("tsId", tsId, DbType.Decimal);
+        p.Add("userId", userId, DbType.Decimal);
+        p.Add("empCode", string.IsNullOrWhiteSpace(empCode) ? null : empCode, DbType.String);
+
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        var flag = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, p, cancellationToken: ct));
+        return flag == 1;
     }
 
     // Job header + customer + mapped industry + equipment details (brand, type,
@@ -263,11 +294,11 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                 INSERT INTO TM_TIME_LINE
                     (TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
                      TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
-                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_CREATION_DATE)
+                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION, TL_CREATION_DATE)
                 VALUES
                     (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
                      :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
-                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, SYSDATE)";
+                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, :TL_LOCATION, SYSDATE)";
 
             foreach (var line in lines)
             {
@@ -319,11 +350,11 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                 INSERT INTO TM_TIME_LINE
                     (TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
                      TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
-                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_CREATION_DATE)
+                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION, TL_CREATION_DATE)
                 VALUES
                     (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
                      :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
-                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, SYSDATE)";
+                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, :TL_LOCATION, SYSDATE)";
             foreach (var line in lines)
             {
                 line.TL_TS_ID = header.TS_ID;

@@ -37,6 +37,16 @@ public class EntryModel : PageModel
     public IReadOnlyList<LineInput> ExistingLines { get; private set; } = [];
     public bool IsAdmin => User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SiteAdmin);
 
+    /// <summary>Admins edit any sheet; a normal employee may edit one he created or is a technician on.</summary>
+    private bool CanEdit(TimeSheetEditDto dto)
+    {
+        if (IsAdmin) return true;
+        if (dto.TS_CREATION_USER_ID == User.UserId()) return true;
+        var emp = User.EmpCode();
+        return emp is not null && dto.Lines.Any(l =>
+            string.Equals(l.TL_TECH_CODE, emp, StringComparison.OrdinalIgnoreCase));
+    }
+
     [BindProperty] public HeaderInput Header { get; set; } = new();
     [BindProperty] public List<LineInput> Lines { get; set; } = [];
 
@@ -69,6 +79,8 @@ public class EntryModel : PageModel
         public DateTime StartDt { get; set; }
         public DateTime EndDt { get; set; }
         public decimal LunchHours { get; set; }
+        // Job Location where this line's work was done — drives the line's labour rate.
+        public string? Location { get; set; }
         // Only used to seed the edit-mode grid display; std hours are recomputed on post.
         public decimal StdHours { get; set; }
     }
@@ -79,17 +91,18 @@ public class EntryModel : PageModel
 
         if (tsId.HasValue)
         {
-            // Editing a posted sheet is an admin-only action.
-            if (!IsAdmin)
-            {
-                TempData["Error"] = "You are not allowed to edit posted time sheets.";
-                return RedirectToPage("/TimeBooking/Index");
-            }
-
             var dto = await _repo.GetTimeSheetForEditAsync(tsId.Value, ct);
             if (dto is null)
             {
                 TempData["Error"] = "Time sheet not found (it may have been voided).";
+                return RedirectToPage("/TimeBooking/Index");
+            }
+
+            // Admins edit any sheet; a normal employee may edit one he is involved in
+            // (he created it, or he is a technician on one of its lines).
+            if (!CanEdit(dto))
+            {
+                TempData["Error"] = "You are not allowed to edit this time sheet.";
                 return RedirectToPage("/TimeBooking/Index");
             }
 
@@ -130,6 +143,7 @@ public class EntryModel : PageModel
                 StartDt = l.TL_START_DT,
                 EndDt = l.TL_END_DT,
                 LunchHours = l.TL_LUNCH_HOURS,
+                Location = l.TL_LOCATION,
                 StdHours = l.TL_STD_HOURS
             }).ToList();
         }
@@ -141,9 +155,12 @@ public class EntryModel : PageModel
     {
         await LoadLookupsAsync(ct);
 
-        if (TsId.HasValue && !IsAdmin)
+        // Re-check involvement on the server (never trust the posted TsId): admins may edit any
+        // sheet; a normal employee only one he created or is a technician on.
+        if (TsId.HasValue && !IsAdmin
+            && !await _repo.CanEditTimeSheetAsync(TsId.Value, User.UserId(), User.EmpCode(), ct))
         {
-            TempData["Error"] = "You are not allowed to edit posted time sheets.";
+            TempData["Error"] = "You are not allowed to edit this time sheet.";
             return RedirectToPage("/TimeBooking/Index");
         }
 
@@ -242,7 +259,10 @@ public class EntryModel : PageModel
         var industryCode = job?.INDUSTRY_CODE ?? Header.IndustryCode;
 
         var duty = ToDutyTiming(Duty);
-        var rate = await _repo.GetLabourRateAsync(Header.Location, industryCode, ct);
+
+        // Labour rate is resolved per line by that line's own location (falling back to the header
+        // location). Cache by location so repeat locations don't re-query — industry is fixed per sheet.
+        var rateByLocation = new Dictionary<string, LabourRateResult>(StringComparer.OrdinalIgnoreCase);
 
         var lineEntities = new List<TM_TIME_LINE>();
         decimal totalNet = 0, totalCost = 0, totalNormal = 0, totalOt = 0, totalStd = 0;
@@ -251,6 +271,13 @@ public class EntryModel : PageModel
         foreach (var l in Lines)
         {
             lineNo++;
+            var lineLocation = string.IsNullOrWhiteSpace(l.Location) ? Header.Location : l.Location;
+            if (!rateByLocation.TryGetValue(lineLocation, out var rate))
+            {
+                rate = await _repo.GetLabourRateAsync(lineLocation, industryCode, ct);
+                rateByLocation[lineLocation] = rate;
+            }
+
             var stdHours = await _repo.GetTaskStdHoursAsync(l.TaskCode, ct);
             var calc = TimeBookingCalculator.Calculate(
                 new TimeLineCalcInput(l.StartDt, l.EndDt, l.LunchHours, rate.Rate, rate.OvertimeMultiplier),
@@ -277,7 +304,8 @@ public class EntryModel : PageModel
                 TL_TIME_TYPE = calc.TimeType == TimeType.Overtime ? "OVERTIME" : "NORMAL",
                 TL_RATE = calc.AppliedRate,
                 TL_LABOUR_COST = calc.LabourCost,
-                TL_JOB_CODE = Header.JobCode
+                TL_JOB_CODE = Header.JobCode,
+                TL_LOCATION = lineLocation
             });
         }
 

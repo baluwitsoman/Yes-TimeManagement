@@ -113,6 +113,9 @@ public class LoginModel : PageModel
             new(ClaimTypes.NameIdentifier, "9001"),
             new(ClaimTypes.Name, $"demo.{effectiveRole.ToLowerInvariant()}"),
             new("user_code", "DEMO"),
+            // Dev-only employee code so the "technician is involved" self-service path is testable
+            // against real bookings (production/SSO populate emp_code from AMM_USER_DETAILS.USER_EMP_CODE).
+            new("emp_code", "YES0013"),
             new(ClaimTypes.Role, effectiveRole)
         };
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

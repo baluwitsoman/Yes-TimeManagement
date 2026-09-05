@@ -103,14 +103,22 @@
         return pad(d.getDate()) + "-" + mon[d.getMonth()] + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
     }
 
-    // ---- Add line from modal ----
-    var addBtn = document.getElementById("addLineBtn");
-    if (addBtn) addBtn.addEventListener("click", onAddLine);
+    // ---- Add / edit a line via the modal ----
+    var editIndex = null;                                   // null = add new; number = edit that row
+    var headerLoc = document.getElementById("location");    // header Job Location (default for new lines)
 
-    function onAddLine() {
+    var addBtn = document.getElementById("addLineBtn");
+    if (addBtn) addBtn.addEventListener("click", onSaveLine);
+
+    // The "Add Task" toolbar button opens the modal in add mode.
+    var addTaskBtn = document.getElementById("addTaskBtn");
+    if (addTaskBtn) addTaskBtn.addEventListener("click", prepareModalForAdd);
+
+    function onSaveLine() {
         var err = document.getElementById("modalError");
         var taskSel = document.getElementById("m_task");
         var techSel = document.getElementById("m_tech");
+        var locSel = document.getElementById("m_location");
         var startV = document.getElementById("m_start").value;
         var endV = document.getElementById("m_end").value;
         var lunch = document.getElementById("m_lunch").value;
@@ -118,6 +126,7 @@
         var problems = [];
         if (!taskSel.value) problems.push("Select a task.");
         if (!techSel.value) problems.push("Select a technician.");
+        if (locSel && !locSel.value) problems.push("Select a job location.");
         if (!startV) problems.push("Enter a start date-time.");
         if (!endV) problems.push("Enter an end date-time.");
 
@@ -135,13 +144,14 @@
         var taskOpt = taskSel.options[taskSel.selectedIndex];
         var techOpt = techSel.options[techSel.selectedIndex];
 
-        lines.push({
+        var line = {
             taskCode: taskSel.value,
             taskName: taskOpt.getAttribute("data-name") || taskOpt.text,
             stdHours: parseFloat(taskOpt.getAttribute("data-std")) || 0,
             techCode: techSel.value,
             techName: techOpt.getAttribute("data-name") || "",
             skill: document.getElementById("m_skill").value,
+            location: locSel ? locSel.value : "",
             start: start,
             end: end,
             startRaw: startV,
@@ -149,18 +159,54 @@
             lunch: parseFloat(lunch) || 0,
             net: net,
             timeType: classify(start, end)
-        });
+        };
+
+        if (editIndex === null) lines.push(line); else lines[editIndex] = line;
 
         render();
-        resetModal();
-        bootstrap.Modal.getInstance(document.getElementById("addTaskModal")).hide();
+        modal().hide();
     }
 
-    function resetModal() {
+    function modal() { return bootstrap.Modal.getOrCreateInstance(document.getElementById("addTaskModal")); }
+
+    // Reset the modal for a new line; default its location to the header Job Location.
+    function prepareModalForAdd() {
+        editIndex = null;
+        document.getElementById("modalError").classList.add("d-none");
         ["m_task", "m_tech", "m_start", "m_end"].forEach(function (id) { document.getElementById(id).value = ""; });
         document.getElementById("m_lunch").value = "0.5";
         document.getElementById("m_skill").selectedIndex = 0;
+        setSelect("m_location", headerLoc ? headerLoc.value : "");
+        setModalMode(false);
     }
+
+    // Pre-fill the modal to edit an existing grid line, then show it.
+    function prepareModalForEdit(i) {
+        var l = lines[i];
+        if (!l) return;
+        editIndex = i;
+        document.getElementById("modalError").classList.add("d-none");
+        setSelect("m_task", l.taskCode);
+        setSelect("m_tech", l.techCode);
+        setSelect("m_skill", l.skill);
+        setSelect("m_location", l.location || (headerLoc ? headerLoc.value : ""));
+        document.getElementById("m_start").value = l.startRaw || "";
+        document.getElementById("m_end").value = l.endRaw || "";
+        document.getElementById("m_lunch").value = l.lunch;
+        setModalMode(true);
+        modal().show();
+    }
+
+    function setModalMode(isEdit) {
+        var title = document.getElementById("taskModalTitle");
+        var btnText = document.getElementById("addLineBtnText");
+        if (title) title.innerHTML = isEdit
+            ? '<i class="fa-solid fa-pen me-2 text-primary"></i>Edit Task Line'
+            : '<i class="fa-solid fa-plus me-2 text-primary"></i>Add Task Line';
+        if (btnText) btnText.textContent = isEdit ? "Save Changes" : "Add to Grid";
+    }
+
+    function setSelect(id, val) { var el = document.getElementById(id); if (el) el.value = (val == null ? "" : val); }
 
     // ---- Render grid + hidden inputs + totals ----
     function render() {
@@ -183,6 +229,7 @@
                 "<td class='text-num'>" + l.stdHours.toFixed(2) + "</td>" +
                 "<td>" + esc(l.techCode + " · " + l.techName) + "</td>" +
                 "<td>" + esc(l.skill) + "</td>" +
+                "<td>" + esc(l.location || "") + "</td>" +
                 "<td>" + fmtDt(l.start) + "</td>" +
                 "<td>" + fmtDt(l.end) + "</td>" +
                 "<td class='text-num'>" + l.lunch.toFixed(2) + "</td>" +
@@ -190,13 +237,19 @@
                 "<td>" + badge + "</td>" +
                 "<td class='text-num text-muted'>auto</td>" +
                 "<td class='text-num text-muted'>auto</td>" +
-                "<td><button type='button' class='btn btn-sm btn-outline-danger' data-i='" + i + "'><i class='fa-solid fa-trash'></i></button></td>" +
+                "<td class='text-nowrap'>" +
+                    "<button type='button' class='btn btn-sm btn-outline-primary me-1' data-edit='" + i + "' title='Edit line'><i class='fa-solid fa-pen'></i></button>" +
+                    "<button type='button' class='btn btn-sm btn-outline-danger' data-i='" + i + "' title='Remove line'><i class='fa-solid fa-trash'></i></button>" +
+                "</td>" +
                 hiddenInputs(l, i);
             body.appendChild(tr);
         });
 
         body.querySelectorAll("button[data-i]").forEach(function (b) {
             b.addEventListener("click", function () { lines.splice(+b.getAttribute("data-i"), 1); render(); });
+        });
+        body.querySelectorAll("button[data-edit]").forEach(function (b) {
+            b.addEventListener("click", function () { prepareModalForEdit(+b.getAttribute("data-edit")); });
         });
 
         document.getElementById("emptyGrid").style.display = lines.length ? "none" : "block";
@@ -212,6 +265,7 @@
         return "<td class='d-none'>" +
             h("TaskCode", l.taskCode) + h("TaskName", l.taskName) +
             h("TechCode", l.techCode) + h("TechName", l.techName) + h("Skill", l.skill) +
+            h("Location", l.location) +
             h("StartDt", l.startRaw) + h("EndDt", l.endRaw) + h("LunchHours", l.lunch) +
             "</td>";
     }
@@ -232,6 +286,7 @@
                 techCode: x.techCode,
                 techName: x.techName,
                 skill: x.skill,
+                location: x.location || "",
                 start: start,
                 end: end,
                 startRaw: x.startRaw,

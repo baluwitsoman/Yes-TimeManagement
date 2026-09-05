@@ -36,15 +36,16 @@ public class IndexModel : PageModel
         // Admins see everything; normal users see only their own postings.
         IsAdmin = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SiteAdmin);
         ScopedToMe = !IsAdmin;
-        decimal? scope = null;
-        if (ScopedToMe && decimal.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
-            scope = id;
+        // Non-admins see only sheets they are involved in — created themselves, or where their
+        // employee code is a technician on a line. Admins pass null scope (see all).
+        decimal? scope = ScopedToMe ? User.UserId() : null;
+        string? scopeEmp = ScopedToMe ? User.EmpCode() : null;
 
         if (PageNo < 1) PageNo = 1;
 
         try
         {
-            var result = await _repo.GetTimeSheetsAsync(scope, Search, DateFrom, DateTo, PageNo, PageSize, ct);
+            var result = await _repo.GetTimeSheetsAsync(scope, scopeEmp, Search, DateFrom, DateTo, PageNo, PageSize, ct);
             Sheets = result.Items;
             TotalCount = result.TotalCount;
             if (PageNo > TotalPages) PageNo = TotalPages;   // clamp after a filter shrinks the set

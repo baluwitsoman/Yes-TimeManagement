@@ -52,6 +52,7 @@ public sealed class TM_TIME_LINE
     public decimal TL_RATE { get; set; }
     public decimal TL_LABOUR_COST { get; set; }
     public string? TL_JOB_CODE { get; set; }
+    public string? TL_LOCATION { get; set; }
 }
 
 // -------- Lookup / view DTOs (read from existing ERP + TM masters) --------
@@ -125,6 +126,7 @@ public sealed class TimeSheetEditDto
 {
     public decimal TS_ID { get; set; }
     public string? TS_SHEET_NO { get; set; }
+    public decimal? TS_CREATION_USER_ID { get; set; }
     public DateTime TS_POSTING_DATE { get; set; }
     public string? TS_JOB_CODE { get; set; }
     public string? TS_CUSTOMER_CODE { get; set; }

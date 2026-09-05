@@ -147,7 +147,7 @@
     <div class="content-card">
         <div class="section-h">
             <i class="fa-solid fa-list-check"></i> Time Lines — booked per Task
-            <button type="button" class="btn btn-primary btn-sm ms-auto" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+            <button type="button" id="addTaskBtn" class="btn btn-primary btn-sm ms-auto" data-bs-toggle="modal" data-bs-target="#addTaskModal">
                 <i class="fa-solid fa-plus me-1"></i> Add Task
             </button>
         </div>
@@ -161,6 +161,7 @@
                         <th class="text-num">Std Hrs</th>
                         <th>Technician</th>
                         <th>Skill</th>
+                        <th>Location</th>
                         <th>Start</th>
                         <th>End</th>
                         <th class="text-num">Lunch</th>
@@ -176,7 +177,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="fw-semibold">
-                        <td colspan="8" class="text-end">Total</td>
+                        <td colspan="9" class="text-end">Total</td>
                         <td class="text-num" id="footNet">0.00</td>
                         <td></td><td></td>
                         <td class="text-num" id="footCost">—</td>
@@ -228,7 +229,7 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fa-solid fa-plus me-2 text-primary"></i>Add Task Line</h5>
+                <h5 class="modal-title" id="taskModalTitle"><i class="fa-solid fa-plus me-2 text-primary"></i>Add Task Line</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -261,6 +262,15 @@
                         </select>
                     </div>
                     <div class="col-md-4">
+                        <label class="form-label">Job Location <span class="req">*</span></label>
+                        <select id="m_location" class="form-select">
+                            @foreach (var loc in Model.Locations)
+                            {
+                                <option value="@loc.CODE">@loc.NAME</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">Start Date-Time <span class="req">*</span></label>
                         <input id="m_start" type="datetime-local" class="form-control" />
                     </div>
@@ -282,7 +292,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="addLineBtn"><i class="fa-solid fa-circle-plus me-2"></i>Add to Grid</button>
+                <button type="button" class="btn btn-primary" id="addLineBtn"><i class="fa-solid fa-circle-plus me-2"></i><span id="addLineBtnText">Add to Grid</span></button>
             </div>
         </div>
     </div>
@@ -313,6 +323,7 @@
                 @:  techCode: "@Html.Raw(Javascript(l.TechCode))",
                 @:  techName: "@Html.Raw(Javascript(l.TechName))",
                 @:  skill: "@Html.Raw(Javascript(l.Skill))",
+                @:  location: "@Html.Raw(Javascript(l.Location))",
                 @:  startRaw: "@l.StartDt.ToString("yyyy-MM-ddTHH:mm")",
                 @:  endRaw: "@l.EndDt.ToString("yyyy-MM-ddTHH:mm")",
                 @:  lunch: @l.LunchHours.ToString(System.Globalization.CultureInfo.InvariantCulture)
