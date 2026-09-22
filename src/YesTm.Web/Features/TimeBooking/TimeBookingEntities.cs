@@ -24,8 +24,14 @@ public sealed class TM_TIME_SHEET
     public decimal TS_NORMAL_HOURS { get; set; }
     public decimal TS_OT_HOURS { get; set; }
     public decimal TS_STD_HOURS { get; set; }
+    public decimal TS_TOTAL_FOOD_ALLOWANCE { get; set; }
+    public decimal TS_TOTAL_TRAVEL_HOURS { get; set; }
+    /// <summary>Labour cost + food allowance across all lines.</summary>
+    public decimal TS_TOTAL_COST { get; set; }
     public string? TS_REMARKS { get; set; }
     public string? TS_ACTIVE_YN { get; set; }
+    /// <summary>Set on sheets that were folded into another sheet for the same job (08 migration).</summary>
+    public decimal? TS_MERGED_INTO_TS_ID { get; set; }
     public decimal? TS_CREATION_USER_ID { get; set; }
     public DateTime? TS_CREATION_DATE { get; set; }
     public decimal? TS_UPDATE_USER_ID { get; set; }
@@ -48,11 +54,32 @@ public sealed class TM_TIME_LINE
     public DateTime TL_END_DT { get; set; }
     public decimal TL_LUNCH_HOURS { get; set; }
     public decimal TL_NET_HOURS { get; set; }
-    public string? TL_TIME_TYPE { get; set; }
-    public decimal TL_RATE { get; set; }
-    public decimal TL_LABOUR_COST { get; set; }
+    public string? TL_TIME_TYPE { get; set; }        // NORMAL | OVERTIME | MIXED
+    public decimal TL_RATE { get; set; }             // normal (charge) rate
+    public decimal TL_LABOUR_COST { get; set; }      // Normal × Rate + OT × OT Rate
     public string? TL_JOB_CODE { get; set; }
     public string? TL_LOCATION { get; set; }
+    // ---- Phase 2 (07_timeline_enhancements.sql) ----
+    public DateTime? TL_WORK_DATE { get; set; }      // task date; START/END are times on this date
+    public decimal TL_NORMAL_HOURS { get; set; }
+    public decimal TL_OT_HOURS { get; set; }
+    public decimal TL_OT_RATE { get; set; }
+    public decimal TL_FOOD_ALLOWANCE { get; set; }
+    public decimal TL_TOTAL_COST { get; set; }       // labour cost + food allowance
+    public string? TL_TRAVEL_SITE { get; set; }
+    public DateTime? TL_TRAVEL_START { get; set; }
+    public DateTime? TL_TRAVEL_END { get; set; }
+    public decimal TL_TRAVEL_HOURS { get; set; }
+    public string? TL_OVERRIDE_YN { get; set; }      // 'Y' when the user adjusted an auto-calculated value
+    public decimal? TL_MERGED_FROM_TS_ID { get; set; }
+}
+
+/// <summary>Sheet that already exists for a job — used to steer the user to it instead of a second sheet.</summary>
+public sealed class ExistingSheetLookup
+{
+    public decimal TS_ID { get; set; }
+    public string? TS_SHEET_NO { get; set; }
+    public string? TS_JOB_CODE { get; set; }
 }
 
 // -------- Lookup / view DTOs (read from existing ERP + TM masters) --------
@@ -115,6 +142,7 @@ public sealed class TimeSheetListItem
     public string? TS_JOB_STATUS { get; set; }
     public decimal TS_TOTAL_NET_HOURS { get; set; }
     public decimal TS_TOTAL_LABOUR_COST { get; set; }
+    public decimal TS_TOTAL_COST { get; set; }
     public int TOTAL_ROWS { get; set; }   // COUNT(*) OVER() — same on every row of the page
 }
 

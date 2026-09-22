@@ -20,11 +20,11 @@
 <div class="content-card">
     <div class="table-responsive">
         <table class="table table-hover align-middle">
-            <thead><tr><th>Location</th><th>Industry</th><th>Time Type</th><th class="text-num">Charge Rate</th><th class="text-num">Cost Rate</th><th class="text-num">OT ×</th><th>Effective</th><th>Status</th><th style="width:160px"></th></tr></thead>
+            <thead><tr><th>Location</th><th>Industry</th><th>Time Type</th><th class="text-num">Charge Rate</th><th class="text-num">Cost Rate</th><th class="text-num">OT ×</th><th class="text-num">Food Allow.</th><th>Effective</th><th>Status</th><th style="width:160px"></th></tr></thead>
             <tbody>
                 @if (Model.Items.Count == 0)
                 {
-                    <tr><td colspan="9" class="grid-empty">No labour rates defined.</td></tr>
+                    <tr><td colspan="10" class="grid-empty">No labour rates defined.</td></tr>
                 }
                 else
                 {
@@ -38,6 +38,7 @@
                             <td class="text-num">@r.LR_RATE.ToString("N2")</td>
                             <td class="text-num">@(r.LR_COST_RATE?.ToString("N2"))</td>
                             <td class="text-num">@(r.LR_OT_MULTIPLIER?.ToString("N2"))</td>
+                            <td class="text-num">@(r.LR_FOOD_ALLOWANCE?.ToString("N2"))</td>
                             <td>@(r.LR_EFFECTIVE_FROM?.ToString("dd-MMM-yyyy"))</td>
                             <td>
                                 @if (active) { <span class="badge-soft badge-normal">Active</span> }
@@ -107,6 +108,10 @@
                     <div class="col-md-6">
                         <label class="form-label">Cost Rate (COGS)</label>
                         <input name="Input.LR_COST_RATE" type="number" step="0.01" min="0" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Food Allowance (per line)</label>
+                        <input name="Input.LR_FOOD_ALLOWANCE" type="number" step="0.01" min="0" class="form-control" data-default="0" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Effective From</label>

@@ -33,7 +33,10 @@ public class TimeBookingCalculatorTests
         var result = TimeBookingCalculator.Calculate(input, duty);
 
         Assert.Equal(TimeType.Normal, result.TimeType);
-        Assert.Equal(15m, result.AppliedRate);
+        Assert.Equal(8.0m, result.NormalHours);
+        Assert.Equal(0m, result.OtHours);
+        Assert.Equal(15m, result.NormalRate);
+        Assert.Equal(22.5m, result.OtRate);
         Assert.Equal(120.00m, result.LabourCost);   // 8.0 * 15
     }
 
@@ -49,20 +52,67 @@ public class TimeBookingCalculatorTests
 
         Assert.Equal(TimeType.Overtime, result.TimeType);
         Assert.Equal(3.0m, result.NetHours);
-        Assert.Equal(22.50m, result.AppliedRate);    // 15 * 1.5
+        Assert.Equal(0m, result.NormalHours);
+        Assert.Equal(3.0m, result.OtHours);
+        Assert.Equal(22.50m, result.OtRate);         // 15 * 1.5
         Assert.Equal(67.50m, result.LabourCost);     // 3.0 * 22.5
     }
 
     [Fact]
-    public void StartBeforeDuty_IsOvertime()
+    public void StartBeforeDuty_SplitsIntoOtAndNormal()
     {
+        // 06:00 -> 09:00: 2h before duty start (OT) + 1h inside (Normal) = Mixed line
         var input = new TimeLineCalcInput(
             new DateTime(2026, 6, 8, 6, 0, 0), new DateTime(2026, 6, 8, 9, 0, 0),
             0m, 15m, 1.5m);
 
         var result = TimeBookingCalculator.Calculate(input, StandardDuty(DayOfWeek.Sunday));
 
-        Assert.Equal(TimeType.Overtime, result.TimeType);
+        Assert.Equal(TimeType.Mixed, result.TimeType);
+        Assert.Equal(1.0m, result.NormalHours);
+        Assert.Equal(2.0m, result.OtHours);
+        Assert.Equal(60.00m, result.LabourCost);     // 1*15 + 2*22.5
+    }
+
+    [Fact]
+    public void RunsPastDutyEnd_LunchComesOutOfNormalFirst()
+    {
+        // 08:00 -> 20:00 with 1h lunch: 9h inside duty, 3h after -> Normal 8, OT 3, Net 11
+        var input = new TimeLineCalcInput(
+            new DateTime(2026, 6, 8, 8, 0, 0), new DateTime(2026, 6, 8, 20, 0, 0),
+            1m, 10m, 1.5m);
+
+        var result = TimeBookingCalculator.Calculate(input, StandardDuty(DayOfWeek.Sunday));
+
+        Assert.Equal(11.0m, result.NetHours);
+        Assert.Equal(8.0m, result.NormalHours);
+        Assert.Equal(3.0m, result.OtHours);
+        Assert.Equal(result.NetHours, result.NormalHours + result.OtHours);
+        Assert.Equal(125.00m, result.LabourCost);    // 8*10 + 3*15
+    }
+
+    [Fact]
+    public void OvernightShift_CountsNextDayDutyWindowAsNormal()
+    {
+        // Mon 22:00 -> Tue 10:00: 10h OT (22:00-08:00) + 2h Normal (08:00-10:00 Tue)
+        var input = new TimeLineCalcInput(
+            new DateTime(2026, 6, 8, 22, 0, 0), new DateTime(2026, 6, 9, 10, 0, 0),
+            0m, 10m, 2m);
+
+        var result = TimeBookingCalculator.Calculate(input, StandardDuty(DayOfWeek.Sunday));
+
+        Assert.Equal(12.0m, result.NetHours);
+        Assert.Equal(2.0m, result.NormalHours);
+        Assert.Equal(10.0m, result.OtHours);
+        Assert.Equal(TimeType.Mixed, result.TimeType);
+        Assert.Equal(220.00m, result.LabourCost);    // 2*10 + 10*20
+    }
+
+    [Fact]
+    public void Cost_UsesAdjustedSplitAndRates()
+    {
+        Assert.Equal(125.00m, TimeBookingCalculator.Cost(8m, 3m, 10m, 15m));
+        Assert.Equal(0m, TimeBookingCalculator.Cost(0m, 0m, 10m, 15m));
     }
 
     [Fact]
@@ -76,6 +126,8 @@ public class TimeBookingCalculatorTests
         var result = TimeBookingCalculator.Calculate(input, StandardDuty(start.DayOfWeek));
 
         Assert.Equal(TimeType.Overtime, result.TimeType);
+        Assert.Equal(0m, result.NormalHours);
+        Assert.Equal(3.0m, result.OtHours);
     }
 
     [Fact]

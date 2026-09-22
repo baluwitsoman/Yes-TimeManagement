@@ -255,7 +255,7 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
         return (await c.QueryAsync<TM_LABOUR_RATE>(new CommandDefinition(
-            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE ORDER BY LR_LOCATION, LR_INDUSTRY_CODE",
+            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE ORDER BY LR_LOCATION, LR_INDUSTRY_CODE",
             cancellationToken: ct))).AsList();
     }
 
@@ -263,7 +263,7 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
         return await c.QueryFirstOrDefaultAsync<TM_LABOUR_RATE>(new CommandDefinition(
-            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE WHERE LR_ID = :id",
+            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE WHERE LR_ID = :id",
             new { id }, cancellationToken: ct));
     }
 
@@ -273,9 +273,9 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
         var id = await c.ExecuteScalarAsync<decimal>(new CommandDefinition(
             "SELECT TM_LABOUR_RATE_SEQ.NEXTVAL FROM DUAL", cancellationToken: ct));
         await c.ExecuteAsync(new CommandDefinition(
-            @"INSERT INTO TM_LABOUR_RATE (LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_EFFECTIVE_FROM, LR_ACTIVE_YN, LR_CREATION_USER_ID, LR_CREATION_DATE)
-              VALUES (:id, :LR_LOCATION, :LR_INDUSTRY_CODE, :LR_TIME_TYPE, :LR_RATE, :LR_COST_RATE, :LR_OT_MULTIPLIER, :LR_EFFECTIVE_FROM, :LR_ACTIVE_YN, :userId, SYSDATE)",
-            new { id, e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, userId },
+            @"INSERT INTO TM_LABOUR_RATE (LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN, LR_CREATION_USER_ID, LR_CREATION_DATE)
+              VALUES (:id, :LR_LOCATION, :LR_INDUSTRY_CODE, :LR_TIME_TYPE, :LR_RATE, :LR_COST_RATE, :LR_OT_MULTIPLIER, :LR_FOOD_ALLOWANCE, :LR_EFFECTIVE_FROM, :LR_ACTIVE_YN, :userId, SYSDATE)",
+            new { id, e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_FOOD_ALLOWANCE, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, userId },
             cancellationToken: ct));
         return id;
     }
@@ -285,9 +285,10 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
         using var c = await db.CreateOpenConnectionAsync(ct);
         await c.ExecuteAsync(new CommandDefinition(
             @"UPDATE TM_LABOUR_RATE SET LR_LOCATION=:LR_LOCATION, LR_INDUSTRY_CODE=:LR_INDUSTRY_CODE, LR_TIME_TYPE=:LR_TIME_TYPE,
-                 LR_RATE=:LR_RATE, LR_COST_RATE=:LR_COST_RATE, LR_OT_MULTIPLIER=:LR_OT_MULTIPLIER, LR_EFFECTIVE_FROM=:LR_EFFECTIVE_FROM, LR_ACTIVE_YN=:LR_ACTIVE_YN
+                 LR_RATE=:LR_RATE, LR_COST_RATE=:LR_COST_RATE, LR_OT_MULTIPLIER=:LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE=:LR_FOOD_ALLOWANCE,
+                 LR_EFFECTIVE_FROM=:LR_EFFECTIVE_FROM, LR_ACTIVE_YN=:LR_ACTIVE_YN
               WHERE LR_ID=:LR_ID",
-            new { e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, e.LR_ID },
+            new { e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_FOOD_ALLOWANCE, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, e.LR_ID },
             cancellationToken: ct));
     }
 

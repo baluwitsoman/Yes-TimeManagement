@@ -48,6 +48,8 @@ public sealed class TM_LABOUR_RATE
     public decimal LR_RATE { get; set; }
     public decimal? LR_COST_RATE { get; set; }
     public decimal? LR_OT_MULTIPLIER { get; set; }
+    /// <summary>Default per-line food allowance applied when this rate is picked for a time line.</summary>
+    public decimal? LR_FOOD_ALLOWANCE { get; set; }
     public DateTime? LR_EFFECTIVE_FROM { get; set; }
     public string LR_ACTIVE_YN { get; set; } = "Y";
 }

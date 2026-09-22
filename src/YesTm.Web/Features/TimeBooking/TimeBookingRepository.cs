@@ -4,7 +4,7 @@ using YesTm.Web.Common.Data;
 
 namespace YesTm.Web.Features.TimeBooking;
 
-public sealed record LabourRateResult(decimal Rate, decimal OvertimeMultiplier);
+public sealed record LabourRateResult(decimal Rate, decimal OvertimeMultiplier, decimal FoodAllowance);
 
 public interface ITimeBookingRepository
 {
@@ -13,6 +13,10 @@ public interface ITimeBookingRepository
     Task<TimeSheetEditDto?> GetTimeSheetForEditAsync(decimal tsId, CancellationToken ct = default);
     /// <summary>True if the user created the sheet or appears as a technician on any of its lines.</summary>
     Task<bool> CanEditTimeSheetAsync(decimal tsId, decimal userId, string? empCode, CancellationToken ct = default);
+    /// <summary>The active sheet already posted for a job (one sheet per job), ignoring <paramref name="excludeTsId"/>.</summary>
+    Task<ExistingSheetLookup?> FindActiveSheetByJobAsync(string jobCode, decimal? excludeTsId, CancellationToken ct = default);
+    /// <summary>Job code → sheet no for every active sheet, to flag jobs that already have a sheet in the Job dropdown.</summary>
+    Task<IReadOnlyDictionary<string, string>> GetActiveSheetNosByJobAsync(CancellationToken ct = default);
     Task<IReadOnlyList<JobLookup>> GetJobsAsync(string? location, CancellationToken ct = default);
     Task<JobLookup?> GetJobAsync(string jobCode, CancellationToken ct = default);
     Task<IReadOnlyList<TechnicianLookup>> GetTechniciansAsync(CancellationToken ct = default);
@@ -55,6 +59,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         const string sql = @"
             SELECT TS_ID, TS_SHEET_NO, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_NAME,
                    TS_LOCATION, TS_JOB_STATUS, TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST,
+                   NVL(TS_TOTAL_COST, TS_TOTAL_LABOUR_COST) AS TS_TOTAL_COST,
                    COUNT(*) OVER() AS TOTAL_ROWS
             FROM   TM_TIME_SHEET
             WHERE  NVL(TS_ACTIVE_YN,'Y') = 'Y'
@@ -101,7 +106,13 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         const string linesSql = @"
             SELECT TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
                    TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
-                   TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION
+                   TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION,
+                   NVL(TL_WORK_DATE, TRUNC(TL_START_DT)) AS TL_WORK_DATE,
+                   NVL(TL_NORMAL_HOURS,0) AS TL_NORMAL_HOURS, NVL(TL_OT_HOURS,0) AS TL_OT_HOURS,
+                   NVL(TL_OT_RATE,0) AS TL_OT_RATE, NVL(TL_FOOD_ALLOWANCE,0) AS TL_FOOD_ALLOWANCE,
+                   NVL(TL_TOTAL_COST, TL_LABOUR_COST) AS TL_TOTAL_COST,
+                   TL_TRAVEL_SITE, TL_TRAVEL_START, TL_TRAVEL_END, NVL(TL_TRAVEL_HOURS,0) AS TL_TRAVEL_HOURS,
+                   NVL(TL_OVERRIDE_YN,'N') AS TL_OVERRIDE_YN, TL_MERGED_FROM_TS_ID
             FROM   TM_TIME_LINE
             WHERE  TL_TS_ID = :tsId
             ORDER  BY TL_LINE_NO";
@@ -136,6 +147,36 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         using var conn = await _db.CreateOpenConnectionAsync(ct);
         var flag = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, p, cancellationToken: ct));
         return flag == 1;
+    }
+
+    public async Task<ExistingSheetLookup?> FindActiveSheetByJobAsync(string jobCode, decimal? excludeTsId, CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT TS_ID, TS_SHEET_NO, TS_JOB_CODE
+            FROM   TM_TIME_SHEET
+            WHERE  TS_JOB_CODE = :jobCode
+              AND  NVL(TS_ACTIVE_YN,'Y') = 'Y'
+              AND  (:excludeTsId IS NULL OR TS_ID <> :excludeTsId)
+            ORDER  BY TS_ID
+            FETCH FIRST 1 ROWS ONLY";
+        var p = new DynamicParameters();
+        p.Add("jobCode", jobCode, DbType.String);
+        p.Add("excludeTsId", excludeTsId, DbType.Decimal);
+
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        return await conn.QueryFirstOrDefaultAsync<ExistingSheetLookup>(new CommandDefinition(sql, p, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> GetActiveSheetNosByJobAsync(CancellationToken ct = default)
+    {
+        const string sql = @"
+            SELECT TS_JOB_CODE, MIN(TS_SHEET_NO) AS TS_SHEET_NO
+            FROM   TM_TIME_SHEET
+            WHERE  NVL(TS_ACTIVE_YN,'Y') = 'Y' AND TS_JOB_CODE IS NOT NULL
+            GROUP  BY TS_JOB_CODE";
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        var rows = await conn.QueryAsync<(string TS_JOB_CODE, string TS_SHEET_NO)>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToDictionary(r => r.TS_JOB_CODE, r => r.TS_SHEET_NO, StringComparer.OrdinalIgnoreCase);
     }
 
     // Job header + customer + mapped industry + equipment details (brand, type,
@@ -249,7 +290,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
     public async Task<LabourRateResult> GetLabourRateAsync(string? location, string? industryCode, CancellationToken ct = default)
     {
         const string sql = @"
-            SELECT LR_RATE, NVL(LR_OT_MULTIPLIER, 1.5) AS LR_OT_MULTIPLIER
+            SELECT LR_RATE, NVL(LR_OT_MULTIPLIER, 1.5) AS LR_OT_MULTIPLIER, NVL(LR_FOOD_ALLOWANCE, 0) AS LR_FOOD_ALLOWANCE
             FROM   TM_LABOUR_RATE
             WHERE  UPPER(LR_LOCATION) = UPPER(:location)
               AND  (LR_INDUSTRY_CODE = :industryCode OR :industryCode IS NULL)
@@ -258,10 +299,27 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             FETCH FIRST 1 ROWS ONLY";
 
         using var conn = await _db.CreateOpenConnectionAsync(ct);
-        var row = await conn.QueryFirstOrDefaultAsync<(decimal LR_RATE, decimal LR_OT_MULTIPLIER)>(
+        var row = await conn.QueryFirstOrDefaultAsync<(decimal LR_RATE, decimal LR_OT_MULTIPLIER, decimal LR_FOOD_ALLOWANCE)>(
             new CommandDefinition(sql, new { location, industryCode }, cancellationToken: ct));
-        return new LabourRateResult(row.LR_RATE, row.LR_OT_MULTIPLIER == 0 ? 1.5m : row.LR_OT_MULTIPLIER);
+        return new LabourRateResult(row.LR_RATE, row.LR_OT_MULTIPLIER == 0 ? 1.5m : row.LR_OT_MULTIPLIER, row.LR_FOOD_ALLOWANCE);
     }
+
+    // Shared by create (insert) and edit (delete + re-insert) — every column of a task line.
+    private const string InsertLineSql = @"
+        INSERT INTO TM_TIME_LINE
+            (TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
+             TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
+             TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION,
+             TL_WORK_DATE, TL_NORMAL_HOURS, TL_OT_HOURS, TL_OT_RATE, TL_FOOD_ALLOWANCE, TL_TOTAL_COST,
+             TL_TRAVEL_SITE, TL_TRAVEL_START, TL_TRAVEL_END, TL_TRAVEL_HOURS, TL_OVERRIDE_YN, TL_MERGED_FROM_TS_ID,
+             TL_CREATION_DATE)
+        VALUES
+            (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
+             :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
+             :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, :TL_LOCATION,
+             :TL_WORK_DATE, :TL_NORMAL_HOURS, :TL_OT_HOURS, :TL_OT_RATE, :TL_FOOD_ALLOWANCE, :TL_TOTAL_COST,
+             :TL_TRAVEL_SITE, :TL_TRAVEL_START, :TL_TRAVEL_END, :TL_TRAVEL_HOURS, :TL_OVERRIDE_YN, :TL_MERGED_FROM_TS_ID,
+             SYSDATE)";
 
     public async Task<string> SaveTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, CancellationToken ct = default)
     {
@@ -281,29 +339,22 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                      TS_EQUIPMENT, TS_INDUSTRY_CODE, TS_LOCATION, TS_WORK_TYPE_CODE, TS_JOB_STATUS,
                      TS_BRAND, TS_EQUIPMENT_TYPE, TS_SERVICE_TYPE, TS_SERIAL_NO, TS_JOB_OPENING_DATE,
                      TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST, TS_NORMAL_HOURS, TS_OT_HOURS, TS_STD_HOURS,
+                     TS_TOTAL_FOOD_ALLOWANCE, TS_TOTAL_TRAVEL_HOURS, TS_TOTAL_COST,
                      TS_REMARKS, TS_ACTIVE_YN, TS_CREATION_USER_ID, TS_CREATION_DATE)
                 VALUES
                     (:TS_ID, :TS_SHEET_NO, :TS_POSTING_DATE, :TS_JOB_CODE, :TS_CUSTOMER_CODE, :TS_CUSTOMER_NAME,
                      :TS_EQUIPMENT, :TS_INDUSTRY_CODE, :TS_LOCATION, :TS_WORK_TYPE_CODE, :TS_JOB_STATUS,
                      :TS_BRAND, :TS_EQUIPMENT_TYPE, :TS_SERVICE_TYPE, :TS_SERIAL_NO, :TS_JOB_OPENING_DATE,
                      :TS_TOTAL_NET_HOURS, :TS_TOTAL_LABOUR_COST, :TS_NORMAL_HOURS, :TS_OT_HOURS, :TS_STD_HOURS,
+                     :TS_TOTAL_FOOD_ALLOWANCE, :TS_TOTAL_TRAVEL_HOURS, :TS_TOTAL_COST,
                      :TS_REMARKS, 'Y', :TS_CREATION_USER_ID, SYSDATE)";
             await conn.ExecuteAsync(new CommandDefinition(insHeader, header, tx, cancellationToken: ct));
 
-            const string insLine = @"
-                INSERT INTO TM_TIME_LINE
-                    (TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
-                     TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
-                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION, TL_CREATION_DATE)
-                VALUES
-                    (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
-                     :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
-                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, :TL_LOCATION, SYSDATE)";
 
             foreach (var line in lines)
             {
                 line.TL_TS_ID = newId;
-                await conn.ExecuteAsync(new CommandDefinition(insLine, line, tx, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition(InsertLineSql, line, tx, cancellationToken: ct));
             }
 
             tx.Commit();
@@ -337,6 +388,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                     TS_SERIAL_NO = :TS_SERIAL_NO, TS_JOB_OPENING_DATE = :TS_JOB_OPENING_DATE,
                     TS_TOTAL_NET_HOURS = :TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST = :TS_TOTAL_LABOUR_COST,
                     TS_NORMAL_HOURS = :TS_NORMAL_HOURS, TS_OT_HOURS = :TS_OT_HOURS, TS_STD_HOURS = :TS_STD_HOURS,
+                    TS_TOTAL_FOOD_ALLOWANCE = :TS_TOTAL_FOOD_ALLOWANCE, TS_TOTAL_TRAVEL_HOURS = :TS_TOTAL_TRAVEL_HOURS,
+                    TS_TOTAL_COST = :TS_TOTAL_COST,
                     TS_REMARKS = :TS_REMARKS, TS_UPDATE_USER_ID = :TS_UPDATE_USER_ID, TS_UPDATE_DATE = SYSDATE
                 WHERE TS_ID = :TS_ID";
             var affected = await conn.ExecuteAsync(new CommandDefinition(updHeader, header, tx, cancellationToken: ct));
@@ -346,19 +399,10 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             await conn.ExecuteAsync(new CommandDefinition(
                 "DELETE FROM TM_TIME_LINE WHERE TL_TS_ID = :id", new { id = header.TS_ID }, tx, cancellationToken: ct));
 
-            const string insLine = @"
-                INSERT INTO TM_TIME_LINE
-                    (TL_ID, TL_TS_ID, TL_LINE_NO, TL_TASK_CODE, TL_TASK_NAME, TL_STD_HOURS,
-                     TL_TECH_CODE, TL_TECH_NAME, TL_SKILL, TL_START_DT, TL_END_DT, TL_LUNCH_HOURS,
-                     TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION, TL_CREATION_DATE)
-                VALUES
-                    (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
-                     :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
-                     :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, :TL_LOCATION, SYSDATE)";
             foreach (var line in lines)
             {
                 line.TL_TS_ID = header.TS_ID;
-                await conn.ExecuteAsync(new CommandDefinition(insLine, line, tx, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition(InsertLineSql, line, tx, cancellationToken: ct));
             }
 
             tx.Commit();

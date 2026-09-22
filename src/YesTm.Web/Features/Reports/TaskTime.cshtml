@@ -129,7 +129,7 @@
                             <td>@(x.TL_START_DT?.ToString("dd-MMM HH:mm"))</td>
                             <td>@(x.TL_END_DT?.ToString("dd-MMM HH:mm"))</td>
                             <td class="text-num">@x.TL_NET_HOURS.ToString("N2")</td>
-                            <td><span class="badge-soft @(x.TL_TIME_TYPE == "OVERTIME" ? "badge-ot" : "badge-normal")">@x.TL_TIME_TYPE</span></td>
+                            <td><span class="badge-soft @(x.TL_TIME_TYPE == "OVERTIME" ? "badge-ot" : x.TL_TIME_TYPE == "MIXED" ? "badge-mixed" : "badge-normal")">@(x.TL_TIME_TYPE == "MIXED" ? "NORMAL + OT" : x.TL_TIME_TYPE)</span></td>
                             <td class="text-num">@x.TL_RATE.ToString("N2")</td>
                             <td class="text-num">@x.TL_LABOUR_COST.ToString("N2")</td>
                             <td>@x.WORK_TYPE_NAME</td>

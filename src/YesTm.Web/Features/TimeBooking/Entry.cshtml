@@ -2,13 +2,18 @@
 @model YesTm.Web.Features.TimeBooking.EntryModel
 @{
     ViewData["Title"] = "Time Booking";
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css" />
 }
 
 <div class="page-head">
     <div>
         <h1 class="page-title"><span class="ico"><i class="fa-solid fa-clock"></i></span>
             @(Model.IsEditMode ? $"Edit Time Sheet {Model.SheetNo}" : "Time Booking Posting")</h1>
-        <p class="page-sub">Book technician time against a Work Order at <strong>Task</strong> level. Net hours, Normal/Overtime, rate and labour cost are computed on post. Each line is keyed by <strong>Job No + Task</strong>.</p>
+        <p class="page-sub">Book technician time against a Work Order at <strong>Task</strong> level — <strong>one time sheet per Job</strong>. Net hours, Normal/Overtime split, rates, labour cost and food allowance are calculated as you enter each task and can be adjusted before posting.</p>
     </div>
     <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Time Sheets</a>
 </div>
@@ -23,6 +28,13 @@
 
 <form method="post" id="timeBookingForm">
     <div asp-validation-summary="All" class="alert alert-danger py-2" id="serverErrors"></div>
+    @if (Model.ConflictingSheet is not null)
+    {
+        <div class="alert alert-warning d-flex align-items-center justify-content-between" role="alert">
+            <span><i class="fa-solid fa-file-circle-exclamation me-2"></i>Time sheet <strong>@Model.ConflictingSheet.TS_SHEET_NO</strong> already exists for job <strong>@Model.ConflictingSheet.TS_JOB_CODE</strong>.</span>
+            <a asp-page="/TimeBooking/Entry" asp-route-tsId="@Model.ConflictingSheet.TS_ID" class="btn btn-sm btn-warning"><i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Open that sheet</a>
+        </div>
+    }
     <input asp-for="TsId" type="hidden" />
 
     <div class="content-card">
@@ -55,7 +67,7 @@
         <div class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">Time Sheet No</label>
-                <input class="form-control field-auto" value="Auto Generated" disabled />
+                <input class="form-control field-auto" value="@(Model.IsEditMode ? Model.SheetNo : "Auto Generated")" disabled />
             </div>
             <div class="col-md-3">
                 <label class="form-label">Posting Date <span class="req">*</span></label>
@@ -67,6 +79,7 @@
                     <option value="">— Select Job —</option>
                     @foreach (var j in Model.Jobs)
                     {
+                        Model.ExistingSheetNos.TryGetValue(j.MTJ_JOB_CODE, out var existingSheet);
                         <option value="@j.MTJ_JOB_CODE"
                                 data-customer-code="@j.MTJ_PARTY_CODE"
                                 data-customer-name="@j.CUSTOMER_NAME"
@@ -76,12 +89,14 @@
                                 data-equip-type="@j.EQUIPMENT_TYPE_DESC"
                                 data-service-type="@j.SERVICE_TYPE_DESC"
                                 data-serial="@j.MTJ_SERIAL_NO"
-                                data-opening="@(j.MTJ_JOB_OPENING_DATE?.ToString("dd-MMM-yyyy HH:mm"))">
-                            @j.MTJ_JOB_CODE — @j.MTJ_JOB_DESC
+                                data-opening="@(j.MTJ_JOB_OPENING_DATE?.ToString("dd-MMM-yyyy HH:mm"))"
+                                data-sheet-no="@existingSheet">
+                            @j.MTJ_JOB_CODE — @j.MTJ_JOB_DESC@(existingSheet is null ? "" : $"  ✓ {existingSheet}")
                         </option>
                     }
                 </select>
                 <span asp-validation-for="Header.JobCode" class="text-danger small"></span>
+                <span class="text-muted small"><i class="fa-regular fa-circle-question me-1"></i>Jobs marked ✓ already have a time sheet — selecting one offers to open it.</span>
             </div>
 
             <div class="col-md-6">
@@ -153,23 +168,25 @@
         </div>
 
         <div class="table-responsive">
-            <table class="table table-hover align-middle" id="linesTable">
+            <table class="table table-sm table-hover align-middle tm-lines" id="linesTable">
                 <thead>
                     <tr>
-                        <th style="width:38px">#</th>
+                        <th style="width:34px">#</th>
+                        <th>Date</th>
                         <th>Task</th>
-                        <th class="text-num">Std Hrs</th>
                         <th>Technician</th>
-                        <th>Skill</th>
-                        <th>Location</th>
-                        <th>Start</th>
-                        <th>End</th>
+                        <th>Loc</th>
+                        <th>Time</th>
                         <th class="text-num">Lunch</th>
-                        <th class="text-num">Net Hrs</th>
-                        <th>Time Type</th>
-                        <th class="text-num">Rate</th>
-                        <th class="text-num">Cost</th>
-                        <th style="width:44px"></th>
+                        <th class="text-num">Net</th>
+                        <th class="text-num">Normal</th>
+                        <th class="text-num">OT</th>
+                        <th class="text-num">Rate / OT</th>
+                        <th class="text-num">Labour</th>
+                        <th class="text-num">Food</th>
+                        <th class="text-num">Total</th>
+                        <th>Travel</th>
+                        <th style="width:78px"></th>
                     </tr>
                 </thead>
                 <tbody id="linesBody">
@@ -177,10 +194,15 @@
                 </tbody>
                 <tfoot>
                     <tr class="fw-semibold">
-                        <td colspan="9" class="text-end">Total</td>
+                        <td colspan="7" class="text-end">Total</td>
                         <td class="text-num" id="footNet">0.00</td>
-                        <td></td><td></td>
-                        <td class="text-num" id="footCost">—</td>
+                        <td class="text-num" id="footNormal">0.00</td>
+                        <td class="text-num" id="footOt">0.00</td>
+                        <td></td>
+                        <td class="text-num" id="footCost">0.00</td>
+                        <td class="text-num" id="footFood">0.00</td>
+                        <td class="text-num" id="footTotal">0.00</td>
+                        <td class="text-num" id="footTravel">0.00 h</td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -199,6 +221,14 @@
                 <div class="kpi-val" id="sumNet">0.00</div><div class="kpi-lbl">Net Labour Hours</div></div>
             <div class="kpi-card"><div class="kpi-icon bg-grad-amber"><i class="fa-solid fa-business-time"></i></div>
                 <div class="kpi-val" id="sumSplit">0.0 / 0.0</div><div class="kpi-lbl">Normal / Overtime Hrs</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-green"><i class="fa-solid fa-coins"></i></div>
+                <div class="kpi-val" id="sumCost">0.00</div><div class="kpi-lbl">Labour Cost</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-purple"><i class="fa-solid fa-utensils"></i></div>
+                <div class="kpi-val" id="sumFood">0.00</div><div class="kpi-lbl">Food Allowance</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-blue"><i class="fa-solid fa-sack-dollar"></i></div>
+                <div class="kpi-val" id="sumTotal">0.00</div><div class="kpi-lbl">Total Cost (Labour + Food)</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-amber"><i class="fa-solid fa-route"></i></div>
+                <div class="kpi-val" id="sumTravel">0.00</div><div class="kpi-lbl">Travel Hours</div></div>
             <div class="kpi-card"><div class="kpi-icon bg-grad-green"><i class="fa-solid fa-stopwatch"></i></div>
                 <div class="kpi-val" id="sumStd">0.00</div><div class="kpi-lbl">Task Standard Hrs (sum)</div></div>
             <div class="kpi-card"><div class="kpi-icon bg-grad-purple"><i class="fa-solid fa-layer-group"></i></div>
@@ -226,7 +256,7 @@
 
 <!-- ===================== ADD TASK MODAL ===================== -->
 <div class="modal fade" id="addTaskModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="taskModalTitle"><i class="fa-solid fa-plus me-2 text-primary"></i>Add Task Line</h5>
@@ -234,6 +264,7 @@
             </div>
             <div class="modal-body">
                 <div class="alert alert-danger py-2 d-none" id="modalError"></div>
+
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Task <span class="req">*</span></label>
@@ -241,7 +272,7 @@
                             <option value="">— Select Task —</option>
                             @foreach (var t in Model.Tasks)
                             {
-                                <option value="@t.TASK_CODE" data-name="@t.TASK_NAME" data-skill="@t.DEFAULT_SKILL" data-std="@t.STD_HOURS">@t.TASK_NAME</option>
+                                <option value="@t.TASK_CODE" data-name="@t.TASK_NAME" data-skill="@t.DEFAULT_SKILL" data-std="@t.STD_HOURS.ToString(inv)">@t.TASK_NAME</option>
                             }
                         </select>
                     </div>
@@ -255,13 +286,13 @@
                             }
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Skill</label>
                         <select id="m_skill" class="form-select">
                             <option>Lead Hand</option><option>Assistant</option><option>Technician</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Job Location <span class="req">*</span></label>
                         <select id="m_location" class="form-select">
                             @foreach (var loc in Model.Locations)
@@ -270,23 +301,91 @@
                             }
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Start Date-Time <span class="req">*</span></label>
-                        <input id="m_start" type="datetime-local" class="form-control" />
+                    <div class="col-md-3">
+                        <label class="form-label">Date <span class="req">*</span></label>
+                        <input id="m_date" class="form-control tm-pick" placeholder="Select date" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">End Date-Time <span class="req">*</span></label>
-                        <input id="m_end" type="datetime-local" class="form-control" />
+                    <div class="col-md-3">
+                        <label class="form-label">Lunch Break (hh:mm)</label>
+                        <input id="m_lunch" class="form-control tm-pick" placeholder="00:30" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Lunch Break (hrs)</label>
-                        <input id="m_lunch" type="number" step="0.25" min="0" value="0.5" class="form-control" />
+                    <div class="col-md-3">
+                        <label class="form-label">Start Time <span class="req">*</span></label>
+                        <input id="m_start" class="form-control tm-pick" placeholder="08:00" />
                     </div>
-                    <div class="col-md-8 d-flex align-items-end">
-                        <div class="text-muted small">
-                            <i class="fa-regular fa-circle-question me-1"></i>
-                            Net Hrs &amp; Time Type preview live; Std Hrs, Rate &amp; Labour Cost are finalised on post.
-                        </div>
+                    <div class="col-md-3">
+                        <label class="form-label">End Time <span class="req">*</span></label>
+                        <input id="m_end" class="form-control tm-pick" placeholder="17:00" />
+                        <span class="text-muted small" id="m_overnight" style="display:none"><i class="fa-solid fa-moon me-1"></i>Ends next day</span>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Net Hrs <span class="badge-soft badge-status">auto</span></label>
+                        <input id="m_net" class="form-control field-auto" readonly />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Time Type <span class="badge-soft badge-status">auto</span></label>
+                        <div id="m_timetype" class="form-control field-auto">—</div>
+                    </div>
+                </div>
+
+                <div class="section-h mt-4">
+                    <i class="fa-solid fa-calculator"></i> Hours &amp; Cost
+                    <span class="text-muted small fw-normal ms-2">auto-calculated from duty timings &amp; labour rate — adjust any value if needed</span>
+                    <span id="m_calcStatus" class="ms-auto small text-muted"></span>
+                    <button type="button" id="m_recalc" class="btn btn-outline-secondary btn-sm ms-2" title="Discard adjustments and recalculate">
+                        <i class="fa-solid fa-rotate me-1"></i>Recalculate</button>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Normal Hrs <span class="tm-adj" data-for="normal"></span></label>
+                        <input id="m_normal" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="normal" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">OT Hrs <span class="tm-adj" data-for="ot"></span></label>
+                        <input id="m_ot" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="ot" />
+                        <span class="text-muted small">Normal + OT = Net; editing one moves hours to the other.</span>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rate (Normal) <span class="tm-adj" data-for="rate"></span></label>
+                        <input id="m_rate" type="number" step="0.01" min="0" class="form-control tm-editable" data-key="rate" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">OT Rate <span class="tm-adj" data-for="otRate"></span></label>
+                        <input id="m_otrate" type="number" step="0.01" min="0" class="form-control tm-editable" data-key="otRate" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Labour Cost <span class="tm-adj" data-for="cost"></span></label>
+                        <input id="m_cost" type="number" step="0.01" min="0" class="form-control tm-editable" data-key="cost" />
+                        <span class="text-muted small">Normal × Rate + OT × OT Rate</span>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Food Allowance <span class="tm-adj" data-for="food"></span></label>
+                        <input id="m_food" type="number" step="0.01" min="0" class="form-control tm-editable" data-key="food" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Total Cost <span class="badge-soft badge-status">auto</span></label>
+                        <input id="m_total" class="form-control field-auto fw-semibold" readonly />
+                        <span class="text-muted small">Labour Cost + Food Allowance</span>
+                    </div>
+                </div>
+
+                <div class="section-h mt-4"><i class="fa-solid fa-route"></i> Travel <span class="text-muted small fw-normal ms-2">optional</span></div>
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">Travel Site</label>
+                        <input id="m_travel_site" class="form-control" maxlength="200" placeholder="e.g. Customer site, Ruwais" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Travel Start</label>
+                        <input id="m_travel_start" class="form-control tm-pick" placeholder="hh:mm" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Travel End</label>
+                        <input id="m_travel_end" class="form-control tm-pick" placeholder="hh:mm" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Total Travel Hrs <span class="tm-adj" data-for="travel"></span></label>
+                        <input id="m_travel_hours" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="travel" />
                     </div>
                 </div>
             </div>
@@ -298,35 +397,66 @@
     </div>
 </div>
 
+<!-- ===================== EXISTING SHEET PROMPT ===================== -->
+<div class="modal fade" id="existingSheetModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-file-circle-exclamation me-2 text-warning"></i>Time sheet already exists</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">Job <strong id="es_job"></strong> already has time sheet <strong id="es_sheet"></strong>.</p>
+                <p class="text-muted mb-0">Only one time sheet is kept per job. Open the existing sheet to add or adjust its task lines.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="es_cancel">Choose another job</button>
+                <a class="btn btn-primary" id="es_open" href="#"><i class="fa-solid fa-arrow-up-right-from-square me-2"></i>Open Time Sheet</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
     <script>
-        // Duty-timing rules passed from the server for live Net-hrs / Time-type preview.
+        // Duty-timing rules passed from the server (used only for the Normal/OT preview until the calc call returns).
         window.TM_DUTY = {
             start: "@Model.Duty.DUTY_START",
             end: "@Model.Duty.DUTY_END",
+            lunch: @Model.Duty.DEFAULT_LUNCH_HOURS.ToString(inv),
             weekend: [@Html.Raw(string.Join(",", (Model.Duty.WEEKEND_DAYS ?? "")
                         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                         .Select(d => Enum.TryParse<DayOfWeek>(d, true, out var dow) ? ((int)dow).ToString() : null)
                         .Where(x => x != null)))]
         };
-        // Endpoint used to re-fetch the Job / Work Order list filtered by Job Location (create mode).
-        window.TM_JOBS_BY_LOCATION_URL = "@Html.Raw(Url.Page(null, "JobsByLocation"))";
+        window.TM_IS_EDIT = @(Model.IsEditMode ? "true" : "false");
+        window.TM_TS_ID = @(Model.TsId?.ToString(inv) ?? "null");
+        window.TM_POSTING_DATE = "@Model.Header.PostingDate.ToString("yyyy-MM-dd")";
+        window.TM_URLS = {
+            jobsByLocation: "@Html.Raw(Url.Page(null, "JobsByLocation"))",
+            sheetByJob: "@Html.Raw(Url.Page(null, "SheetByJob"))",
+            calcLine: "@Html.Raw(Url.Page(null, "CalcLine"))",
+            entry: "@Html.Raw(Url.Page("/TimeBooking/Entry"))"
+        };
         // Seed the grid with the sheet's existing task lines when editing a posted time sheet.
         window.TM_EXISTING_LINES = [
             @foreach (var l in Model.ExistingLines)
             {
                 @:{
-                @:  taskCode: "@Html.Raw(Javascript(l.TaskCode))",
-                @:  taskName: "@Html.Raw(Javascript(l.TaskName))",
-                @:  stdHours: @l.StdHours.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                @:  techCode: "@Html.Raw(Javascript(l.TechCode))",
-                @:  techName: "@Html.Raw(Javascript(l.TechName))",
-                @:  skill: "@Html.Raw(Javascript(l.Skill))",
-                @:  location: "@Html.Raw(Javascript(l.Location))",
-                @:  startRaw: "@l.StartDt.ToString("yyyy-MM-ddTHH:mm")",
-                @:  endRaw: "@l.EndDt.ToString("yyyy-MM-ddTHH:mm")",
-                @:  lunch: @l.LunchHours.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                @:  taskCode: "@Html.Raw(Javascript(l.TaskCode))", taskName: "@Html.Raw(Javascript(l.TaskName))",
+                @:  stdHours: @l.StdHours.ToString(inv),
+                @:  techCode: "@Html.Raw(Javascript(l.TechCode))", techName: "@Html.Raw(Javascript(l.TechName))",
+                @:  skill: "@Html.Raw(Javascript(l.Skill))", location: "@Html.Raw(Javascript(l.Location))",
+                @:  workDate: "@l.WorkDate.ToString("yyyy-MM-dd")", startTime: "@l.StartTime", endTime: "@l.EndTime",
+                @:  lunch: @l.LunchHours.ToString(inv), net: @l.NetHours.ToString(inv),
+                @:  normal: @l.NormalHours.ToString(inv), ot: @l.OtHours.ToString(inv),
+                @:  rate: @l.Rate.ToString(inv), otRate: @l.OtRate.ToString(inv),
+                @:  cost: @l.LabourCost.ToString(inv), food: @l.FoodAllowance.ToString(inv), total: @l.TotalCost.ToString(inv),
+                @:  travelSite: "@Html.Raw(Javascript(l.TravelSite))", travelStart: "@l.TravelStart", travelEnd: "@l.TravelEnd",
+                @:  travelHours: @l.TravelHours.ToString(inv),
+                @:  timeType: "@l.TimeType", overridden: @(l.Overridden ? "true" : "false")
                 @:},
             }
         ];
