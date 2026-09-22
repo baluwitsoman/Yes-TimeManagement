@@ -1,0 +1,182 @@
+@page
+@model YesTm.Web.Features.Reports.TaskTimeModel
+@{
+    ViewData["Title"] = "Task & Time Report";
+    var fromStr = Model.DateFrom?.ToString("yyyy-MM-dd");
+    var toStr = Model.DateTo?.ToString("yyyy-MM-dd");
+    // Preserve current filters/sort on pager + export links.
+    var q = new Dictionary<string, string?>
+    {
+        ["FilterField"] = Model.FilterField.ToString(),
+        ["Search"] = Model.Search,
+        ["DateFrom"] = fromStr,
+        ["DateTo"] = toStr,
+        ["SortBy"] = Model.SortBy.ToString(),
+        ["SortDesc"] = Model.SortDesc.ToString(),
+    };
+    Dictionary<string, string?> QWith(int page)
+    {
+        var d = new Dictionary<string, string?>(q) { ["PageNo"] = page.ToString() };
+        return d;
+    }
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-table-list"></i></span> Task &amp; Time Report</h1>
+        <p class="page-sub">Every task line booked by technicians — filter, sort, and export to Excel or PDF.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-success" asp-page-handler="ExportExcel"
+           asp-all-route-data="q"><i class="fa-solid fa-file-excel me-2"></i>Export Excel</a>
+        <a class="btn btn-outline-danger" asp-page="/Reports/TaskTimePrint"
+           asp-all-route-data="q" target="_blank"><i class="fa-solid fa-file-pdf me-2"></i>Print / PDF</a>
+    </div>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="fa-solid fa-plug-circle-xmark me-2"></i>
+        <span>Database not reachable. Configure the Oracle connection string to view the report.</span>
+    </div>
+}
+
+<div class="content-card">
+    <form method="get" class="row g-2 align-items-end mb-3">
+        <div class="col-md-2">
+            <label class="form-label">Filter by</label>
+            <select name="FilterField" class="form-select">
+                @foreach (var opt in Enum.GetNames<YesTm.Web.Features.Reports.ReportFilterField>())
+                {
+                    <option value="@opt" selected="@(Model.FilterField.ToString() == opt)">@(opt == "All" ? "All fields" : opt)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Search</label>
+            <input name="Search" value="@Model.Search" class="form-control" placeholder="Job / customer / technician / task…" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Date From</label>
+            <input name="DateFrom" type="date" value="@fromStr" class="form-control" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Date To</label>
+            <input name="DateTo" type="date" value="@toStr" class="form-control" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Sort by</label>
+            <select name="SortBy" class="form-select">
+                @foreach (var opt in Enum.GetNames<YesTm.Web.Features.Reports.ReportSortBy>())
+                {
+                    <option value="@opt" selected="@(Model.SortBy.ToString() == opt)">@opt</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-1">
+            <label class="form-label">Order</label>
+            <select name="SortDesc" class="form-select">
+                <option value="false" selected="@(!Model.SortDesc)">Asc</option>
+                <option value="true" selected="@(Model.SortDesc)">Desc</option>
+            </select>
+        </div>
+        <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-outline-primary"><i class="fa-solid fa-magnifying-glass me-1"></i>Apply</button>
+            <a asp-page="/Reports/TaskTime" class="btn btn-outline-secondary"><i class="fa-solid fa-xmark me-1"></i>Clear</a>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Posting Date</th>
+                    <th>Sheet No</th>
+                    <th>Job No</th>
+                    <th>Customer</th>
+                    <th>Task</th>
+                    <th>Technician</th>
+                    <th>Skill</th>
+                    <th>Location</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th class="text-num">Net Hrs</th>
+                    <th>Type</th>
+                    <th class="text-num">Rate</th>
+                    <th class="text-num">Cost</th>
+                    <th>Work Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Rows.Count == 0)
+                {
+                    <tr><td colspan="15" class="grid-empty">No task lines found.</td></tr>
+                }
+                else
+                {
+                    @foreach (var x in Model.Rows)
+                    {
+                        <tr>
+                            <td>@x.TS_POSTING_DATE.ToString("dd-MMM-yyyy")</td>
+                            <td class="fw-semibold">@x.TS_SHEET_NO</td>
+                            <td>@x.TL_JOB_CODE</td>
+                            <td>@x.TS_CUSTOMER_NAME</td>
+                            <td>@x.TL_TASK_NAME</td>
+                            <td>@x.TL_TECH_CODE @(string.IsNullOrEmpty(x.TL_TECH_NAME) ? "" : "· " + x.TL_TECH_NAME)</td>
+                            <td>@x.TL_SKILL</td>
+                            <td>@x.TL_LOCATION</td>
+                            <td>@(x.TL_START_DT?.ToString("dd-MMM HH:mm"))</td>
+                            <td>@(x.TL_END_DT?.ToString("dd-MMM HH:mm"))</td>
+                            <td class="text-num">@x.TL_NET_HOURS.ToString("N2")</td>
+                            <td><span class="badge-soft @(x.TL_TIME_TYPE == "OVERTIME" ? "badge-ot" : "badge-normal")">@x.TL_TIME_TYPE</span></td>
+                            <td class="text-num">@x.TL_RATE.ToString("N2")</td>
+                            <td class="text-num">@x.TL_LABOUR_COST.ToString("N2")</td>
+                            <td>@x.WORK_TYPE_NAME</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+            @if (Model.Rows.Count > 0)
+            {
+                <tfoot>
+                    <tr class="fw-semibold">
+                        <td colspan="10" class="text-end">Grand Total (all @Model.TotalCount rows)</td>
+                        <td class="text-num">@Model.GrandNet.ToString("N2")</td>
+                        <td></td><td></td>
+                        <td class="text-num">@Model.GrandCost.ToString("N2")</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            }
+        </table>
+    </div>
+
+    @if (Model.TotalCount > 0)
+    {
+        var from = (Model.PageNo - 1) * YesTm.Web.Features.Reports.TaskTimeModel.PageSize + 1;
+        var to = Math.Min(Model.PageNo * YesTm.Web.Features.Reports.TaskTimeModel.PageSize, Model.TotalCount);
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="text-muted small">Showing @from–@to of @Model.TotalCount</span>
+            @if (Model.TotalPages > 1)
+            {
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(Model.PageNo <= 1 ? "disabled" : "")">
+                            <a class="page-link" asp-page="/Reports/TaskTime" asp-all-route-data="QWith(Model.PageNo - 1)">Prev</a>
+                        </li>
+                        @for (var pp = 1; pp <= Model.TotalPages; pp++)
+                        {
+                            <li class="page-item @(pp == Model.PageNo ? "active" : "")">
+                                <a class="page-link" asp-page="/Reports/TaskTime" asp-all-route-data="QWith(pp)">@pp</a>
+                            </li>
+                        }
+                        <li class="page-item @(Model.PageNo >= Model.TotalPages ? "disabled" : "")">
+                            <a class="page-link" asp-page="/Reports/TaskTime" asp-all-route-data="QWith(Model.PageNo + 1)">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        </div>
+    }
+</div>

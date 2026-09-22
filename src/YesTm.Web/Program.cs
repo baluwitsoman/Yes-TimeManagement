@@ -53,6 +53,7 @@ try
     builder.Services.AddScoped<ITimeBookingRepository, TimeBookingRepository>();
     builder.Services.AddScoped<IAdministrationRepository, AdministrationRepository>();
     builder.Services.AddScoped<YesTm.Web.Features.JobCard.IJobCardRepository, YesTm.Web.Features.JobCard.JobCardRepository>();
+    builder.Services.AddScoped<YesTm.Web.Features.Reports.IReportRepository, YesTm.Web.Features.Reports.ReportRepository>();
     builder.Services.AddMasterRepositories();
 
     // -----------------------------------------------------------------------

@@ -1,0 +1,93 @@
+@page
+@model YesTm.Web.Features.Reports.TaskTimePrintModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Task &amp; Time Report</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: "Segoe UI", Arial, sans-serif; color: #1a1a1a; margin: 24px; font-size: 12px; }
+        h1 { font-size: 18px; margin: 0 0 2px; }
+        .sub { color: #555; font-size: 12px; margin: 0 0 2px; }
+        .meta { color: #777; font-size: 11px; margin: 0 0 12px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 3px 6px; text-align: left; vertical-align: top; }
+        th { background: #f2f2f2; }
+        td.num, th.num { text-align: right; white-space: nowrap; }
+        tfoot td { font-weight: bold; background: #f8f8f8; }
+        .toolbar { margin-bottom: 12px; }
+        .toolbar button { padding: 6px 14px; font-size: 13px; cursor: pointer; }
+        @@media print { .toolbar { display: none; } body { margin: 0; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="window.print()">Print / Save as PDF</button>
+    </div>
+
+    <h1>Task &amp; Time Report</h1>
+    <p class="sub">Yellow Equipment Services LLC — Technician Time Management</p>
+    <p class="meta">@Model.FilterSummary() &nbsp;|&nbsp; Generated @DateTime.Now.ToString("dd-MMM-yyyy HH:mm") &nbsp;|&nbsp; @Model.Rows.Count row(s)</p>
+
+    @if (Model.IsOffline)
+    {
+        <p>Database not reachable — no data to display.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Posting Date</th><th>Sheet No</th><th>Job No</th><th>Customer</th><th>Task</th>
+                    <th>Technician</th><th>Skill</th><th>Location</th><th>Start</th><th>End</th>
+                    <th class="num">Std</th><th class="num">Net</th><th>Type</th><th class="num">Rate</th>
+                    <th class="num">Cost</th><th>Work Type</th><th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var x in Model.Rows)
+                {
+                    <tr>
+                        <td>@x.TS_POSTING_DATE.ToString("dd-MMM-yyyy")</td>
+                        <td>@x.TS_SHEET_NO</td>
+                        <td>@x.TL_JOB_CODE</td>
+                        <td>@x.TS_CUSTOMER_NAME</td>
+                        <td>@x.TL_TASK_NAME</td>
+                        <td>@x.TL_TECH_CODE @(string.IsNullOrEmpty(x.TL_TECH_NAME) ? "" : "· " + x.TL_TECH_NAME)</td>
+                        <td>@x.TL_SKILL</td>
+                        <td>@x.TL_LOCATION</td>
+                        <td>@(x.TL_START_DT?.ToString("dd-MMM HH:mm"))</td>
+                        <td>@(x.TL_END_DT?.ToString("dd-MMM HH:mm"))</td>
+                        <td class="num">@x.TL_STD_HOURS.ToString("N2")</td>
+                        <td class="num">@x.TL_NET_HOURS.ToString("N2")</td>
+                        <td>@x.TL_TIME_TYPE</td>
+                        <td class="num">@x.TL_RATE.ToString("N2")</td>
+                        <td class="num">@x.TL_LABOUR_COST.ToString("N2")</td>
+                        <td>@x.WORK_TYPE_NAME</td>
+                        <td>@x.TS_JOB_STATUS</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="11" style="text-align:right">Grand Total</td>
+                    <td class="num">@Model.GrandNet.ToString("N2")</td>
+                    <td></td><td></td>
+                    <td class="num">@Model.GrandCost.ToString("N2")</td>
+                    <td></td><td></td>
+                </tr>
+            </tfoot>
+        </table>
+    }
+
+    <script>
+        // Auto-open the print dialog once the report has rendered.
+        window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 300); });
+    </script>
+</body>
+</html>
