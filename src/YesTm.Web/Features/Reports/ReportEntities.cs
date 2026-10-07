@@ -27,11 +27,35 @@ public sealed class TaskTimeReportRow
     public decimal TL_LABOUR_COST { get; set; }
     public string? WORK_TYPE_NAME { get; set; }
     public string? TS_JOB_STATUS { get; set; }
+    // ---- Phase 2 line columns ----
+    public DateTime? TL_WORK_DATE { get; set; }
+    public decimal TL_LUNCH_HOURS { get; set; }
+    public decimal TL_NORMAL_HOURS { get; set; }
+    public decimal TL_OT_HOURS { get; set; }
+    public decimal TL_OT_RATE { get; set; }
+    public decimal TL_FOOD_ALLOWANCE { get; set; }
+    public decimal TL_TOTAL_COST { get; set; }
+    public string? TL_TRAVEL_SITE { get; set; }
+    public DateTime? TL_TRAVEL_START { get; set; }
+    public DateTime? TL_TRAVEL_END { get; set; }
+    public decimal TL_TRAVEL_HOURS { get; set; }
+    public string? TL_OVERRIDE_YN { get; set; }
 
     // Window aggregates — identical on every row of a given filtered set.
     public int TOTAL_ROWS { get; set; }
     public decimal GRAND_NET { get; set; }
     public decimal GRAND_COST { get; set; }
+    public decimal GRAND_NORMAL { get; set; }
+    public decimal GRAND_OT { get; set; }
+    public decimal GRAND_FOOD { get; set; }
+    public decimal GRAND_TOTAL { get; set; }
+    public decimal GRAND_TRAVEL { get; set; }
+}
+
+/// <summary>Grand totals across the whole filtered set of the Task &amp; Time report.</summary>
+public sealed record ReportTotals(decimal Net, decimal Cost, decimal Normal, decimal Ot, decimal Food, decimal Total, decimal Travel)
+{
+    public static readonly ReportTotals Zero = new(0, 0, 0, 0, 0, 0, 0);
 }
 
 /// <summary>Bound filter/sort/paging state for the Task &amp; Time report.</summary>
@@ -48,4 +72,8 @@ public sealed class ReportFilter
 }
 
 /// <summary>A page of report rows plus the total count and grand totals across the whole filtered set.</summary>
-public sealed record PagedReport(IReadOnlyList<TaskTimeReportRow> Rows, int TotalCount, decimal GrandNet, decimal GrandCost);
+public sealed record PagedReport(IReadOnlyList<TaskTimeReportRow> Rows, int TotalCount, ReportTotals Totals)
+{
+    public decimal GrandNet => Totals.Net;
+    public decimal GrandCost => Totals.Cost;
+}

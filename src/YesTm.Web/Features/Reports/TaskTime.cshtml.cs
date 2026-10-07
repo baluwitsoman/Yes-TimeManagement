@@ -1,4 +1,3 @@
-using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using YesTm.Web.Common.Security;
@@ -28,8 +27,9 @@ public class TaskTimeModel : PageModel
 
     public IReadOnlyList<TaskTimeReportRow> Rows { get; private set; } = [];
     public int TotalCount { get; private set; }
-    public decimal GrandNet { get; private set; }
-    public decimal GrandCost { get; private set; }
+    public ReportTotals Totals { get; private set; } = ReportTotals.Zero;
+    public decimal GrandNet => Totals.Net;
+    public decimal GrandCost => Totals.Cost;
     public bool IsOffline { get; private set; }
     public int TotalPages => TotalCount == 0 ? 1 : (int)Math.Ceiling(TotalCount / (double)PageSize);
 
@@ -60,8 +60,7 @@ public class TaskTimeModel : PageModel
             var result = await _repo.GetTaskTimeAsync(BuildFilter(paged: true), uid, emp, paged: true, ct);
             Rows = result.Rows;
             TotalCount = result.TotalCount;
-            GrandNet = result.GrandNet;
-            GrandCost = result.GrandCost;
+            Totals = result.Totals;
             if (PageNo > TotalPages) PageNo = TotalPages;
         }
         catch (Exception ex)
@@ -71,60 +70,33 @@ public class TaskTimeModel : PageModel
         }
     }
 
+    public string FilterSummary()
+    {
+        var parts = new List<string>();
+        var f = FilterField == ReportFilterField.All ? "All fields" : FilterField.ToString();
+        if (!string.IsNullOrWhiteSpace(Search)) parts.Add($"{f}: \"{Search}\"");
+        if (DateFrom is { } df) parts.Add($"from {df:dd-MMM-yyyy}");
+        if (DateTo is { } dt) parts.Add($"to {dt:dd-MMM-yyyy}");
+        if (parts.Count == 0) parts.Add("All task lines");
+        return string.Join(" · ", parts);
+    }
+
     public async Task<IActionResult> OnGetExportExcelAsync(CancellationToken ct)
     {
         var (uid, emp) = Scope();
         var result = await _repo.GetTaskTimeAsync(BuildFilter(paged: false), uid, emp, paged: false, ct);
-
-        using var wb = new XLWorkbook();
-        var ws = wb.AddWorksheet("Task & Time");
-
-        string[] headers =
-        [
-            "Sheet No", "Posting Date", "Job No", "Customer", "Task", "Tech Code", "Technician",
-            "Skill", "Location", "Start", "End", "Std Hrs", "Net Hrs", "Time Type", "Rate", "Labour Cost",
-            "Work Type", "Job Status"
-        ];
-        for (var c = 0; c < headers.Length; c++)
-            ws.Cell(1, c + 1).Value = headers[c];
-        ws.Row(1).Style.Font.Bold = true;
-
-        var r = 2;
-        foreach (var x in result.Rows)
-        {
-            ws.Cell(r, 1).Value = x.TS_SHEET_NO;
-            ws.Cell(r, 2).Value = x.TS_POSTING_DATE;
-            ws.Cell(r, 2).Style.DateFormat.Format = "dd-MMM-yyyy";
-            ws.Cell(r, 3).Value = x.TL_JOB_CODE;
-            ws.Cell(r, 4).Value = x.TS_CUSTOMER_NAME;
-            ws.Cell(r, 5).Value = x.TL_TASK_NAME;
-            ws.Cell(r, 6).Value = x.TL_TECH_CODE;
-            ws.Cell(r, 7).Value = x.TL_TECH_NAME;
-            ws.Cell(r, 8).Value = x.TL_SKILL;
-            ws.Cell(r, 9).Value = x.TL_LOCATION;
-            if (x.TL_START_DT is { } sdt) { ws.Cell(r, 10).Value = sdt; ws.Cell(r, 10).Style.DateFormat.Format = "dd-MMM-yyyy HH:mm"; }
-            if (x.TL_END_DT is { } edt) { ws.Cell(r, 11).Value = edt; ws.Cell(r, 11).Style.DateFormat.Format = "dd-MMM-yyyy HH:mm"; }
-            ws.Cell(r, 12).Value = x.TL_STD_HOURS;
-            ws.Cell(r, 13).Value = x.TL_NET_HOURS;
-            ws.Cell(r, 14).Value = x.TL_TIME_TYPE;
-            ws.Cell(r, 15).Value = x.TL_RATE;
-            ws.Cell(r, 16).Value = x.TL_LABOUR_COST;
-            ws.Cell(r, 17).Value = x.WORK_TYPE_NAME;
-            ws.Cell(r, 18).Value = x.TS_JOB_STATUS;
-            r++;
-        }
-
-        // Totals row.
-        ws.Cell(r, 11).Value = "Total";
-        ws.Cell(r, 13).Value = result.GrandNet;
-        ws.Cell(r, 16).Value = result.GrandCost;
-        ws.Range(r, 1, r, 18).Style.Font.Bold = true;
-
-        ws.Columns().AdjustToContents();
-
-        using var ms = new MemoryStream();
-        wb.SaveAs(ms);
-        var fileName = $"TaskTimeReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
-        return File(ms.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        var bytes = TaskTimeExcel.BuildFlat(result.Rows, result.Totals);
+        return File(bytes, XlsxMime, $"TaskTimeReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx");
     }
+
+    /// <summary>Technician-wise workbook: a Summary tab plus one tab per technician (lines grouped by Job → Sheet).</summary>
+    public async Task<IActionResult> OnGetExportTechnicianAsync(CancellationToken ct)
+    {
+        var (uid, emp) = Scope();
+        var result = await _repo.GetTaskTimeAsync(BuildFilter(paged: false), uid, emp, paged: false, ct);
+        var bytes = TaskTimeExcel.BuildTechnicianWise(result.Rows, FilterSummary());
+        return File(bytes, XlsxMime, $"TechnicianTaskReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx");
+    }
+
+    private const string XlsxMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 }

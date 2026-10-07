@@ -23,8 +23,7 @@ public class TaskTimePrintModel : PageModel
     [BindProperty(SupportsGet = true)] public bool SortDesc { get; set; }
 
     public IReadOnlyList<TaskTimeReportRow> Rows { get; private set; } = [];
-    public decimal GrandNet { get; private set; }
-    public decimal GrandCost { get; private set; }
+    public ReportTotals Totals { get; private set; } = ReportTotals.Zero;
     public bool IsOffline { get; private set; }
 
     private bool IsAdmin => User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SiteAdmin);
@@ -52,8 +51,7 @@ public class TaskTimePrintModel : PageModel
         {
             var result = await _repo.GetTaskTimeAsync(filter, uid, emp, paged: false, ct);
             Rows = result.Rows;
-            GrandNet = result.GrandNet;
-            GrandCost = result.GrandCost;
+            Totals = result.Totals;
         }
         catch (Exception ex)
         {

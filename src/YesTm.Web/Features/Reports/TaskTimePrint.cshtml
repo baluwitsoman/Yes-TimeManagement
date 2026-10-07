@@ -11,7 +11,7 @@
     <title>Task &amp; Time Report</title>
     <style>
         * { box-sizing: border-box; }
-        body { font-family: "Segoe UI", Arial, sans-serif; color: #1a1a1a; margin: 24px; font-size: 12px; }
+        body { font-family: "Segoe UI", Arial, sans-serif; color: #1a1a1a; margin: 24px; font-size: 10.5px; }
         h1 { font-size: 18px; margin: 0 0 2px; }
         .sub { color: #555; font-size: 12px; margin: 0 0 2px; }
         .meta { color: #777; font-size: 11px; margin: 0 0 12px; }
@@ -23,6 +23,8 @@
         .toolbar { margin-bottom: 12px; }
         .toolbar button { padding: 6px 14px; font-size: 13px; cursor: pointer; }
         @@media print { .toolbar { display: none; } body { margin: 0; } }
+        @@page { size: A4 landscape; margin: 10mm; }
+        .note { color: #777; font-size: 10px; margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -44,9 +46,12 @@
             <thead>
                 <tr>
                     <th>Posting Date</th><th>Sheet No</th><th>Job No</th><th>Customer</th><th>Task</th>
-                    <th>Technician</th><th>Skill</th><th>Location</th><th>Start</th><th>End</th>
-                    <th class="num">Std</th><th class="num">Net</th><th>Type</th><th class="num">Rate</th>
-                    <th class="num">Cost</th><th>Work Type</th><th>Status</th>
+                    <th>Technician</th><th>Skill</th><th>Location</th><th>Date</th><th>Start</th><th>End</th>
+                    <th class="num">Lunch</th><th class="num">Std</th><th class="num">Net</th>
+                    <th class="num">Normal</th><th class="num">OT</th><th>Type</th>
+                    <th class="num">Rate</th><th class="num">OT Rate</th><th class="num">Labour</th>
+                    <th class="num">Food</th><th class="num">Total</th><th>Travel Site</th><th class="num">Travel Hrs</th>
+                    <th>Work Type</th><th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -61,13 +66,22 @@
                         <td>@x.TL_TECH_CODE @(string.IsNullOrEmpty(x.TL_TECH_NAME) ? "" : "· " + x.TL_TECH_NAME)</td>
                         <td>@x.TL_SKILL</td>
                         <td>@x.TL_LOCATION</td>
-                        <td>@(x.TL_START_DT?.ToString("dd-MMM HH:mm"))</td>
-                        <td>@(x.TL_END_DT?.ToString("dd-MMM HH:mm"))</td>
+                        <td>@(x.TL_WORK_DATE?.ToString("dd-MMM-yyyy"))</td>
+                        <td>@(x.TL_START_DT?.ToString("HH:mm"))</td>
+                        <td>@(x.TL_END_DT?.ToString("HH:mm"))@(x.TL_END_DT?.Date > x.TL_START_DT?.Date ? " +1" : "")</td>
+                        <td class="num">@x.TL_LUNCH_HOURS.ToString("N2")</td>
                         <td class="num">@x.TL_STD_HOURS.ToString("N2")</td>
                         <td class="num">@x.TL_NET_HOURS.ToString("N2")</td>
-                        <td>@x.TL_TIME_TYPE</td>
+                        <td class="num">@x.TL_NORMAL_HOURS.ToString("N2")</td>
+                        <td class="num">@x.TL_OT_HOURS.ToString("N2")</td>
+                        <td>@(x.TL_TIME_TYPE == "MIXED" ? "NORMAL + OT" : x.TL_TIME_TYPE)@(x.TL_OVERRIDE_YN == "Y" ? " *" : "")</td>
                         <td class="num">@x.TL_RATE.ToString("N2")</td>
+                        <td class="num">@x.TL_OT_RATE.ToString("N2")</td>
                         <td class="num">@x.TL_LABOUR_COST.ToString("N2")</td>
+                        <td class="num">@x.TL_FOOD_ALLOWANCE.ToString("N2")</td>
+                        <td class="num">@x.TL_TOTAL_COST.ToString("N2")</td>
+                        <td>@x.TL_TRAVEL_SITE</td>
+                        <td class="num">@(x.TL_TRAVEL_HOURS > 0 ? x.TL_TRAVEL_HOURS.ToString("N2") : "")</td>
                         <td>@x.WORK_TYPE_NAME</td>
                         <td>@x.TS_JOB_STATUS</td>
                     </tr>
@@ -75,14 +89,21 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="11" style="text-align:right">Grand Total</td>
-                    <td class="num">@Model.GrandNet.ToString("N2")</td>
-                    <td></td><td></td>
-                    <td class="num">@Model.GrandCost.ToString("N2")</td>
+                    <td colspan="13" style="text-align:right">Grand Total</td>
+                    <td class="num">@Model.Totals.Net.ToString("N2")</td>
+                    <td class="num">@Model.Totals.Normal.ToString("N2")</td>
+                    <td class="num">@Model.Totals.Ot.ToString("N2")</td>
+                    <td></td><td></td><td></td>
+                    <td class="num">@Model.Totals.Cost.ToString("N2")</td>
+                    <td class="num">@Model.Totals.Food.ToString("N2")</td>
+                    <td class="num">@Model.Totals.Total.ToString("N2")</td>
+                    <td></td>
+                    <td class="num">@Model.Totals.Travel.ToString("N2")</td>
                     <td></td><td></td>
                 </tr>
             </tfoot>
         </table>
+        <p class="note">* = line contains user-adjusted values (hours, rates, cost or allowance differ from the automatic calculation).</p>
     }
 
     <script>

@@ -29,6 +29,9 @@
     <div class="d-flex gap-2">
         <a class="btn btn-outline-success" asp-page-handler="ExportExcel"
            asp-all-route-data="q"><i class="fa-solid fa-file-excel me-2"></i>Export Excel</a>
+        <a class="btn btn-outline-success" asp-page-handler="ExportTechnician"
+           asp-all-route-data="q" title="Excel workbook with one tab per technician, lines grouped by job and time sheet">
+            <i class="fa-solid fa-users me-2"></i>Technician wise Task report</a>
         <a class="btn btn-outline-danger" asp-page="/Reports/TaskTimePrint"
            asp-all-route-data="q" target="_blank"><i class="fa-solid fa-file-pdf me-2"></i>Print / PDF</a>
     </div>
@@ -88,7 +91,7 @@
     </form>
 
     <div class="table-responsive">
-        <table class="table table-hover table-sm align-middle">
+        <table class="table table-hover table-sm align-middle tm-lines">
             <thead>
                 <tr>
                     <th>Posting Date</th>
@@ -99,19 +102,25 @@
                     <th>Technician</th>
                     <th>Skill</th>
                     <th>Location</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th class="text-num">Net Hrs</th>
+                    <th>Work Date</th>
+                    <th>Time</th>
+                    <th class="text-num">Lunch</th>
+                    <th class="text-num">Net</th>
+                    <th class="text-num">Normal</th>
+                    <th class="text-num">OT</th>
                     <th>Type</th>
-                    <th class="text-num">Rate</th>
-                    <th class="text-num">Cost</th>
+                    <th class="text-num">Rate / OT</th>
+                    <th class="text-num">Labour</th>
+                    <th class="text-num">Food</th>
+                    <th class="text-num">Total</th>
+                    <th>Travel</th>
                     <th>Work Type</th>
                 </tr>
             </thead>
             <tbody>
                 @if (Model.Rows.Count == 0)
                 {
-                    <tr><td colspan="15" class="grid-empty">No task lines found.</td></tr>
+                    <tr><td colspan="21" class="grid-empty">No task lines found.</td></tr>
                 }
                 else
                 {
@@ -126,12 +135,19 @@
                             <td>@x.TL_TECH_CODE @(string.IsNullOrEmpty(x.TL_TECH_NAME) ? "" : "· " + x.TL_TECH_NAME)</td>
                             <td>@x.TL_SKILL</td>
                             <td>@x.TL_LOCATION</td>
-                            <td>@(x.TL_START_DT?.ToString("dd-MMM HH:mm"))</td>
-                            <td>@(x.TL_END_DT?.ToString("dd-MMM HH:mm"))</td>
-                            <td class="text-num">@x.TL_NET_HOURS.ToString("N2")</td>
-                            <td><span class="badge-soft @(x.TL_TIME_TYPE == "OVERTIME" ? "badge-ot" : x.TL_TIME_TYPE == "MIXED" ? "badge-mixed" : "badge-normal")">@(x.TL_TIME_TYPE == "MIXED" ? "NORMAL + OT" : x.TL_TIME_TYPE)</span></td>
-                            <td class="text-num">@x.TL_RATE.ToString("N2")</td>
+                            <td>@(x.TL_WORK_DATE?.ToString("dd-MMM-yyyy"))</td>
+                            <td>@(x.TL_START_DT?.ToString("HH:mm")) - @(x.TL_END_DT?.ToString("HH:mm"))@(x.TL_END_DT?.Date > x.TL_START_DT?.Date ? " +1" : "")</td>
+                            <td class="text-num">@x.TL_LUNCH_HOURS.ToString("N2")</td>
+                            <td class="text-num fw-semibold">@x.TL_NET_HOURS.ToString("N2")</td>
+                            <td class="text-num">@x.TL_NORMAL_HOURS.ToString("N2")</td>
+                            <td class="text-num">@x.TL_OT_HOURS.ToString("N2")</td>
+                            <td><span class="badge-soft @(x.TL_TIME_TYPE == "OVERTIME" ? "badge-ot" : x.TL_TIME_TYPE == "MIXED" ? "badge-mixed" : "badge-normal")">@(x.TL_TIME_TYPE == "MIXED" ? "NORMAL + OT" : x.TL_TIME_TYPE)</span>
+                                @if (x.TL_OVERRIDE_YN == "Y") { <span class="badge-soft badge-adj" title="Contains user-adjusted values">adj</span> }</td>
+                            <td class="text-num">@x.TL_RATE.ToString("N2") / @x.TL_OT_RATE.ToString("N2")</td>
                             <td class="text-num">@x.TL_LABOUR_COST.ToString("N2")</td>
+                            <td class="text-num">@x.TL_FOOD_ALLOWANCE.ToString("N2")</td>
+                            <td class="text-num fw-semibold">@x.TL_TOTAL_COST.ToString("N2")</td>
+                            <td class="small">@x.TL_TRAVEL_SITE@(x.TL_TRAVEL_HOURS > 0 ? $"{(string.IsNullOrEmpty(x.TL_TRAVEL_SITE) ? "" : " / ")}{x.TL_TRAVEL_HOURS:N2} h" : "")</td>
                             <td>@x.WORK_TYPE_NAME</td>
                         </tr>
                     }
@@ -141,10 +157,15 @@
             {
                 <tfoot>
                     <tr class="fw-semibold">
-                        <td colspan="10" class="text-end">Grand Total (all @Model.TotalCount rows)</td>
-                        <td class="text-num">@Model.GrandNet.ToString("N2")</td>
+                        <td colspan="11" class="text-end">Grand Total (all @Model.TotalCount rows)</td>
+                        <td class="text-num">@Model.Totals.Net.ToString("N2")</td>
+                        <td class="text-num">@Model.Totals.Normal.ToString("N2")</td>
+                        <td class="text-num">@Model.Totals.Ot.ToString("N2")</td>
                         <td></td><td></td>
-                        <td class="text-num">@Model.GrandCost.ToString("N2")</td>
+                        <td class="text-num">@Model.Totals.Cost.ToString("N2")</td>
+                        <td class="text-num">@Model.Totals.Food.ToString("N2")</td>
+                        <td class="text-num">@Model.Totals.Total.ToString("N2")</td>
+                        <td class="text-num">@Model.Totals.Travel.ToString("N2") h</td>
                         <td></td>
                     </tr>
                 </tfoot>

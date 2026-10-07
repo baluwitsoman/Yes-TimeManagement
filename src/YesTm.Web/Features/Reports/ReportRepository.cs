@@ -63,9 +63,24 @@ public sealed class ReportRepository : IReportRepository
                    l.TL_TASK_NAME, l.TL_TECH_CODE, l.TL_TECH_NAME, l.TL_SKILL, l.TL_LOCATION,
                    l.TL_START_DT, l.TL_END_DT, l.TL_STD_HOURS, l.TL_NET_HOURS, l.TL_TIME_TYPE,
                    l.TL_RATE, l.TL_LABOUR_COST, w.WORK_TYPE_NAME, s.TS_JOB_STATUS,
+                   NVL(l.TL_WORK_DATE, TRUNC(l.TL_START_DT)) AS TL_WORK_DATE,
+                   NVL(l.TL_LUNCH_HOURS,0)    AS TL_LUNCH_HOURS,
+                   NVL(l.TL_NORMAL_HOURS,0)   AS TL_NORMAL_HOURS,
+                   NVL(l.TL_OT_HOURS,0)       AS TL_OT_HOURS,
+                   NVL(l.TL_OT_RATE,0)        AS TL_OT_RATE,
+                   NVL(l.TL_FOOD_ALLOWANCE,0) AS TL_FOOD_ALLOWANCE,
+                   NVL(l.TL_TOTAL_COST, l.TL_LABOUR_COST) AS TL_TOTAL_COST,
+                   l.TL_TRAVEL_SITE, l.TL_TRAVEL_START, l.TL_TRAVEL_END,
+                   NVL(l.TL_TRAVEL_HOURS,0)   AS TL_TRAVEL_HOURS,
+                   NVL(l.TL_OVERRIDE_YN,'N')  AS TL_OVERRIDE_YN,
                    COUNT(*) OVER()                    AS TOTAL_ROWS,
                    SUM(l.TL_NET_HOURS)   OVER()       AS GRAND_NET,
-                   SUM(l.TL_LABOUR_COST) OVER()       AS GRAND_COST
+                   SUM(l.TL_LABOUR_COST) OVER()       AS GRAND_COST,
+                   SUM(NVL(l.TL_NORMAL_HOURS,0))   OVER() AS GRAND_NORMAL,
+                   SUM(NVL(l.TL_OT_HOURS,0))       OVER() AS GRAND_OT,
+                   SUM(NVL(l.TL_FOOD_ALLOWANCE,0)) OVER() AS GRAND_FOOD,
+                   SUM(NVL(l.TL_TOTAL_COST, l.TL_LABOUR_COST)) OVER() AS GRAND_TOTAL,
+                   SUM(NVL(l.TL_TRAVEL_HOURS,0))   OVER() AS GRAND_TRAVEL
             FROM   TM_TIME_LINE l
             JOIN   TM_TIME_SHEET s ON s.TS_ID = l.TL_TS_ID
             LEFT JOIN TM_WORK_TYPE w ON w.WORK_TYPE_CODE = s.TS_WORK_TYPE_CODE
@@ -94,8 +109,10 @@ public sealed class ReportRepository : IReportRepository
         using var conn = await _db.CreateOpenConnectionAsync(ct);
         var rows = (await conn.QueryAsync<TaskTimeReportRow>(new CommandDefinition(sql, p, cancellationToken: ct))).AsList();
         var total = rows.Count > 0 ? rows[0].TOTAL_ROWS : 0;
-        var grandNet = rows.Count > 0 ? rows[0].GRAND_NET : 0m;
-        var grandCost = rows.Count > 0 ? rows[0].GRAND_COST : 0m;
-        return new PagedReport(rows, total, grandNet, grandCost);
+        var totals = rows.Count > 0
+            ? new ReportTotals(rows[0].GRAND_NET, rows[0].GRAND_COST, rows[0].GRAND_NORMAL, rows[0].GRAND_OT,
+                               rows[0].GRAND_FOOD, rows[0].GRAND_TOTAL, rows[0].GRAND_TRAVEL)
+            : ReportTotals.Zero;
+        return new PagedReport(rows, total, totals);
     }
 }
