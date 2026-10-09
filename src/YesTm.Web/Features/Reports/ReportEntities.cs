@@ -27,6 +27,7 @@ public sealed class TaskTimeReportRow
     public decimal TL_LABOUR_COST { get; set; }
     public string? WORK_TYPE_NAME { get; set; }
     public string? TS_JOB_STATUS { get; set; }
+    public string? TS_LOCATION { get; set; }          // sheet (job) location
     // ---- Phase 2 line columns ----
     public DateTime? TL_WORK_DATE { get; set; }
     public decimal TL_LUNCH_HOURS { get; set; }
@@ -40,6 +41,10 @@ public sealed class TaskTimeReportRow
     public DateTime? TL_TRAVEL_END { get; set; }
     public decimal TL_TRAVEL_HOURS { get; set; }
     public string? TL_OVERRIDE_YN { get; set; }
+    // ---- Phase 3 (field service) ----
+    public string? TL_SEGMENT_TYPE { get; set; }      // TRAVEL | WORK
+    public decimal TL_IDLE_HOURS { get; set; }
+    public string? TL_IDLE_REASON { get; set; }
 
     // Window aggregates — identical on every row of a given filtered set.
     public int TOTAL_ROWS { get; set; }

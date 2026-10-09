@@ -27,13 +27,17 @@
         <p class="page-sub">Every task line booked by technicians — filter, sort, and export to Excel or PDF.</p>
     </div>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-success" asp-page-handler="ExportExcel"
-           asp-all-route-data="q"><i class="fa-solid fa-file-excel me-2"></i>Export Excel</a>
-        <a class="btn btn-outline-success" asp-page-handler="ExportTechnician"
-           asp-all-route-data="q" title="Excel workbook with one tab per technician, lines grouped by job and time sheet">
-            <i class="fa-solid fa-users me-2"></i>Technician wise Task report</a>
-        <a class="btn btn-outline-danger" asp-page="/Reports/TaskTimePrint"
-           asp-all-route-data="q" target="_blank"><i class="fa-solid fa-file-pdf me-2"></i>Print / PDF</a>
+        @* Downloads submit the filter form as it is on screen, so they always use the selected criteria. *@
+        <button type="submit" form="reportFilter" name="handler" value="ExportExcel" class="btn btn-outline-success">
+            <i class="fa-solid fa-file-excel me-2"></i>Export Excel</button>
+        <button type="submit" form="reportFilter" name="handler" value="ExportTechnician" class="btn btn-outline-success"
+                title="Excel workbook: summary + one tab per technician, lines grouped by job">
+            <i class="fa-solid fa-users me-2"></i>Technician wise</button>
+        <button type="submit" form="reportFilter" name="handler" value="ExportJob" class="btn btn-outline-success"
+                title="Excel workbook: summary + one tab per job, lines grouped by technician">
+            <i class="fa-solid fa-briefcase me-2"></i>Job wise</button>
+        <button type="submit" form="reportFilter" formaction="@Url.Page("/Reports/TaskTimePrint")" formtarget="_blank"
+                class="btn btn-outline-danger"><i class="fa-solid fa-file-pdf me-2"></i>Print / PDF</button>
     </div>
 </div>
 
@@ -46,7 +50,7 @@
 }
 
 <div class="content-card">
-    <form method="get" class="row g-2 align-items-end mb-3">
+    <form method="get" id="reportFilter" class="row g-2 align-items-end mb-3">
         <div class="col-md-2">
             <label class="form-label">Filter by</label>
             <select name="FilterField" class="form-select">
@@ -61,11 +65,11 @@
             <input name="Search" value="@Model.Search" class="form-control" placeholder="Job / customer / technician / task…" />
         </div>
         <div class="col-md-2">
-            <label class="form-label">Date From</label>
+            <label class="form-label">Work Date From</label>
             <input name="DateFrom" type="date" value="@fromStr" class="form-control" />
         </div>
         <div class="col-md-2">
-            <label class="form-label">Date To</label>
+            <label class="form-label">Work Date To</label>
             <input name="DateTo" type="date" value="@toStr" class="form-control" />
         </div>
         <div class="col-md-2">
@@ -131,7 +135,7 @@
                             <td class="fw-semibold">@x.TS_SHEET_NO</td>
                             <td>@x.TL_JOB_CODE</td>
                             <td>@x.TS_CUSTOMER_NAME</td>
-                            <td>@x.TL_TASK_NAME</td>
+                            <td>@x.TL_TASK_NAME@if (x.TL_SEGMENT_TYPE == "TRAVEL") { <span class="badge-soft badge-status ms-1">travel</span> }@if (x.TL_IDLE_HOURS > 0) { <div class="small text-muted">idle @x.TL_IDLE_HOURS.ToString("N2") h @x.TL_IDLE_REASON</div> }</td>
                             <td>@x.TL_TECH_CODE @(string.IsNullOrEmpty(x.TL_TECH_NAME) ? "" : "· " + x.TL_TECH_NAME)</td>
                             <td>@x.TL_SKILL</td>
                             <td>@x.TL_LOCATION</td>

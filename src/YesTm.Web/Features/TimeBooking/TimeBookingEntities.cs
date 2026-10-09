@@ -32,6 +32,11 @@ public sealed class TM_TIME_SHEET
     public string? TS_ACTIVE_YN { get; set; }
     /// <summary>Set on sheets that were folded into another sheet for the same job (08 migration).</summary>
     public decimal? TS_MERGED_INTO_TS_ID { get; set; }
+    // ---- Phase 3 (09_field_service.sql) ----
+    public string? TS_SHEET_TYPE { get; set; } = SheetTypes.Standard;   // STANDARD | FIELD
+    public decimal TS_TOTAL_IDLE_HOURS { get; set; }
+    /// <summary>Field sheets: km × km rate from the Field Service Report (kept out of TS_TOTAL_COST).</summary>
+    public decimal TS_VEHICLE_COST { get; set; }
     public decimal? TS_CREATION_USER_ID { get; set; }
     public DateTime? TS_CREATION_DATE { get; set; }
     public decimal? TS_UPDATE_USER_ID { get; set; }
@@ -72,6 +77,28 @@ public sealed class TM_TIME_LINE
     public decimal TL_TRAVEL_HOURS { get; set; }
     public string? TL_OVERRIDE_YN { get; set; }      // 'Y' when the user adjusted an auto-calculated value
     public decimal? TL_MERGED_FROM_TS_ID { get; set; }
+    // ---- Phase 3 (09_field_service.sql) ----
+    public string? TL_SEGMENT_TYPE { get; set; } = SegmentTypes.Work;   // TRAVEL | WORK
+    public decimal TL_IDLE_HOURS { get; set; }       // waiting time inside the segment (part of Net, not productive)
+    public string? TL_IDLE_REASON { get; set; }
+}
+
+/// <summary>TM_TIME_SHEET.TS_SHEET_TYPE values.</summary>
+public static class SheetTypes
+{
+    public const string Standard = "STANDARD";
+    /// <summary>Field job booked on the Field Service Report screen.</summary>
+    public const string Field = "FIELD";
+
+    public static bool IsFieldLocation(string? location) =>
+        string.Equals(location?.Trim(), "Field", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>TM_TIME_LINE.TL_SEGMENT_TYPE values.</summary>
+public static class SegmentTypes
+{
+    public const string Travel = "TRAVEL";
+    public const string Work = "WORK";
 }
 
 /// <summary>Sheet that already exists for a job — used to steer the user to it instead of a second sheet.</summary>
@@ -99,6 +126,8 @@ public sealed class JobLookup
     public string? SERVICE_TYPE_DESC { get; set; }
     public string? MTJ_SERIAL_NO { get; set; }
     public DateTime? MTJ_JOB_OPENING_DATE { get; set; }
+    public string? MTJ_CONTACT_PERSON { get; set; }
+    public string? MTJ_CONTACT_PHONE { get; set; }
 }
 
 public sealed class TechnicianLookup
@@ -128,6 +157,7 @@ public sealed class DutyTimingDto
     public string DUTY_END { get; set; } = "17:00";
     public decimal DEFAULT_LUNCH_HOURS { get; set; } = 0.5m;
     public string WEEKEND_DAYS { get; set; } = "Friday,Saturday";
+    public decimal STD_HOURS_PER_DAY { get; set; } = 8m;
 }
 
 /// <summary>Header summary row for the Time Booking list page.</summary>
@@ -139,6 +169,7 @@ public sealed class TimeSheetListItem
     public string? TS_JOB_CODE { get; set; }
     public string? TS_CUSTOMER_NAME { get; set; }
     public string? TS_LOCATION { get; set; }
+    public string? TS_SHEET_TYPE { get; set; }
     public string? TS_JOB_STATUS { get; set; }
     public decimal TS_TOTAL_NET_HOURS { get; set; }
     public decimal TS_TOTAL_LABOUR_COST { get; set; }
@@ -169,5 +200,6 @@ public sealed class TimeSheetEditDto
     public string? TS_WORK_TYPE_CODE { get; set; }
     public string? TS_JOB_STATUS { get; set; }
     public string? TS_REMARKS { get; set; }
+    public string? TS_SHEET_TYPE { get; set; }
     public List<TM_TIME_LINE> Lines { get; set; } = [];
 }

@@ -255,7 +255,7 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
         return (await c.QueryAsync<TM_LABOUR_RATE>(new CommandDefinition(
-            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE ORDER BY LR_LOCATION, LR_INDUSTRY_CODE",
+            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_KM_RATE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE ORDER BY LR_LOCATION, LR_INDUSTRY_CODE",
             cancellationToken: ct))).AsList();
     }
 
@@ -263,7 +263,7 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
         return await c.QueryFirstOrDefaultAsync<TM_LABOUR_RATE>(new CommandDefinition(
-            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE WHERE LR_ID = :id",
+            "SELECT LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_KM_RATE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN FROM TM_LABOUR_RATE WHERE LR_ID = :id",
             new { id }, cancellationToken: ct));
     }
 
@@ -273,9 +273,9 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
         var id = await c.ExecuteScalarAsync<decimal>(new CommandDefinition(
             "SELECT TM_LABOUR_RATE_SEQ.NEXTVAL FROM DUAL", cancellationToken: ct));
         await c.ExecuteAsync(new CommandDefinition(
-            @"INSERT INTO TM_LABOUR_RATE (LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN, LR_CREATION_USER_ID, LR_CREATION_DATE)
-              VALUES (:id, :LR_LOCATION, :LR_INDUSTRY_CODE, :LR_TIME_TYPE, :LR_RATE, :LR_COST_RATE, :LR_OT_MULTIPLIER, :LR_FOOD_ALLOWANCE, :LR_EFFECTIVE_FROM, :LR_ACTIVE_YN, :userId, SYSDATE)",
-            new { id, e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_FOOD_ALLOWANCE, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, userId },
+            @"INSERT INTO TM_LABOUR_RATE (LR_ID, LR_LOCATION, LR_INDUSTRY_CODE, LR_TIME_TYPE, LR_RATE, LR_COST_RATE, LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE, LR_KM_RATE, LR_EFFECTIVE_FROM, LR_ACTIVE_YN, LR_CREATION_USER_ID, LR_CREATION_DATE)
+              VALUES (:id, :LR_LOCATION, :LR_INDUSTRY_CODE, :LR_TIME_TYPE, :LR_RATE, :LR_COST_RATE, :LR_OT_MULTIPLIER, :LR_FOOD_ALLOWANCE, NVL(:LR_KM_RATE,0), :LR_EFFECTIVE_FROM, :LR_ACTIVE_YN, :userId, SYSDATE)",
+            new { id, e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_FOOD_ALLOWANCE, e.LR_KM_RATE, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, userId },
             cancellationToken: ct));
         return id;
     }
@@ -285,10 +285,10 @@ public sealed class LabourRateRepository(IDbConnectionFactory db) : ILabourRateR
         using var c = await db.CreateOpenConnectionAsync(ct);
         await c.ExecuteAsync(new CommandDefinition(
             @"UPDATE TM_LABOUR_RATE SET LR_LOCATION=:LR_LOCATION, LR_INDUSTRY_CODE=:LR_INDUSTRY_CODE, LR_TIME_TYPE=:LR_TIME_TYPE,
-                 LR_RATE=:LR_RATE, LR_COST_RATE=:LR_COST_RATE, LR_OT_MULTIPLIER=:LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE=:LR_FOOD_ALLOWANCE,
+                 LR_RATE=:LR_RATE, LR_COST_RATE=:LR_COST_RATE, LR_OT_MULTIPLIER=:LR_OT_MULTIPLIER, LR_FOOD_ALLOWANCE=:LR_FOOD_ALLOWANCE, LR_KM_RATE=NVL(:LR_KM_RATE,0),
                  LR_EFFECTIVE_FROM=:LR_EFFECTIVE_FROM, LR_ACTIVE_YN=:LR_ACTIVE_YN
               WHERE LR_ID=:LR_ID",
-            new { e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_FOOD_ALLOWANCE, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, e.LR_ID },
+            new { e.LR_LOCATION, e.LR_INDUSTRY_CODE, e.LR_TIME_TYPE, e.LR_RATE, e.LR_COST_RATE, e.LR_OT_MULTIPLIER, e.LR_FOOD_ALLOWANCE, e.LR_KM_RATE, e.LR_EFFECTIVE_FROM, e.LR_ACTIVE_YN, e.LR_ID },
             cancellationToken: ct));
     }
 
@@ -313,11 +313,17 @@ public interface IDutyTimingRepository
 
 public sealed class DutyTimingRepository(IDbConnectionFactory db) : IDutyTimingRepository
 {
+    // DT_STD_HOURS_PER_DAY arrives with db/10 — tolerate a database where it has not been run yet.
+    private static Task<bool> HasStd(System.Data.IDbConnection c, CancellationToken ct) =>
+        SchemaInfo.HasColumnAsync(c, "TM_DUTY_TIMING", "DT_STD_HOURS_PER_DAY", ct);
+    private static async Task<string> StdSelect(System.Data.IDbConnection c, CancellationToken ct) =>
+        await HasStd(c, ct) ? "DT_STD_HOURS_PER_DAY" : "CAST(NULL AS NUMBER) AS DT_STD_HOURS_PER_DAY";
+
     public async Task<IReadOnlyList<TM_DUTY_TIMING>> GetAllAsync(CancellationToken ct = default)
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
         return (await c.QueryAsync<TM_DUTY_TIMING>(new CommandDefinition(
-            "SELECT DT_ID, DT_NAME, DT_START, DT_END, DT_LUNCH_HOURS, DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK, ACTIVE_YN FROM TM_DUTY_TIMING ORDER BY DT_ID",
+            $"SELECT DT_ID, DT_NAME, DT_START, DT_END, DT_LUNCH_HOURS, DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK, {await StdSelect(c, ct)}, ACTIVE_YN FROM TM_DUTY_TIMING ORDER BY DT_ID",
             cancellationToken: ct))).AsList();
     }
 
@@ -325,7 +331,7 @@ public sealed class DutyTimingRepository(IDbConnectionFactory db) : IDutyTimingR
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
         return await c.QueryFirstOrDefaultAsync<TM_DUTY_TIMING>(new CommandDefinition(
-            "SELECT DT_ID, DT_NAME, DT_START, DT_END, DT_LUNCH_HOURS, DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK, ACTIVE_YN FROM TM_DUTY_TIMING WHERE DT_ID = :id",
+            $"SELECT DT_ID, DT_NAME, DT_START, DT_END, DT_LUNCH_HOURS, DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK, {await StdSelect(c, ct)}, ACTIVE_YN FROM TM_DUTY_TIMING WHERE DT_ID = :id",
             new { id }, cancellationToken: ct));
     }
 
@@ -334,10 +340,11 @@ public sealed class DutyTimingRepository(IDbConnectionFactory db) : IDutyTimingR
         using var c = await db.CreateOpenConnectionAsync(ct);
         var id = await c.ExecuteScalarAsync<decimal>(new CommandDefinition(
             "SELECT TM_DUTY_TIMING_SEQ.NEXTVAL FROM DUAL", cancellationToken: ct));
+        var std = await HasStd(c, ct);
         await c.ExecuteAsync(new CommandDefinition(
-            @"INSERT INTO TM_DUTY_TIMING (DT_ID, DT_NAME, DT_START, DT_END, DT_LUNCH_HOURS, DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK, ACTIVE_YN, CREATION_USER_ID, CREATION_DATE)
-              VALUES (:id, :DT_NAME, :DT_START, :DT_END, :DT_LUNCH_HOURS, :DT_WEEKEND_DAYS, :DT_MONTHLY_BENCHMARK, :ACTIVE_YN, :userId, SYSDATE)",
-            new { id, e.DT_NAME, e.DT_START, e.DT_END, e.DT_LUNCH_HOURS, e.DT_WEEKEND_DAYS, e.DT_MONTHLY_BENCHMARK, e.ACTIVE_YN, userId },
+            $@"INSERT INTO TM_DUTY_TIMING (DT_ID, DT_NAME, DT_START, DT_END, DT_LUNCH_HOURS, DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK, {(std ? "DT_STD_HOURS_PER_DAY, " : "")}ACTIVE_YN, CREATION_USER_ID, CREATION_DATE)
+              VALUES (:id, :DT_NAME, :DT_START, :DT_END, :DT_LUNCH_HOURS, :DT_WEEKEND_DAYS, :DT_MONTHLY_BENCHMARK, {(std ? "NVL(:DT_STD_HOURS_PER_DAY,8), " : "")}:ACTIVE_YN, :userId, SYSDATE)",
+            new { id, e.DT_NAME, e.DT_START, e.DT_END, e.DT_LUNCH_HOURS, e.DT_WEEKEND_DAYS, e.DT_MONTHLY_BENCHMARK, e.DT_STD_HOURS_PER_DAY, e.ACTIVE_YN, userId },
             cancellationToken: ct));
         return id;
     }
@@ -345,11 +352,12 @@ public sealed class DutyTimingRepository(IDbConnectionFactory db) : IDutyTimingR
     public async Task UpdateAsync(TM_DUTY_TIMING e, decimal userId, CancellationToken ct = default)
     {
         using var c = await db.CreateOpenConnectionAsync(ct);
+        var std = await HasStd(c, ct) ? "DT_STD_HOURS_PER_DAY=NVL(:DT_STD_HOURS_PER_DAY,8), " : "";
         await c.ExecuteAsync(new CommandDefinition(
-            @"UPDATE TM_DUTY_TIMING SET DT_NAME=:DT_NAME, DT_START=:DT_START, DT_END=:DT_END, DT_LUNCH_HOURS=:DT_LUNCH_HOURS,
-                 DT_WEEKEND_DAYS=:DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK=:DT_MONTHLY_BENCHMARK, ACTIVE_YN=:ACTIVE_YN
+            $@"UPDATE TM_DUTY_TIMING SET DT_NAME=:DT_NAME, DT_START=:DT_START, DT_END=:DT_END, DT_LUNCH_HOURS=:DT_LUNCH_HOURS,
+                 DT_WEEKEND_DAYS=:DT_WEEKEND_DAYS, DT_MONTHLY_BENCHMARK=:DT_MONTHLY_BENCHMARK, {std}ACTIVE_YN=:ACTIVE_YN
               WHERE DT_ID=:DT_ID",
-            new { e.DT_NAME, e.DT_START, e.DT_END, e.DT_LUNCH_HOURS, e.DT_WEEKEND_DAYS, e.DT_MONTHLY_BENCHMARK, e.ACTIVE_YN, e.DT_ID },
+            new { e.DT_NAME, e.DT_START, e.DT_END, e.DT_LUNCH_HOURS, e.DT_WEEKEND_DAYS, e.DT_MONTHLY_BENCHMARK, e.DT_STD_HOURS_PER_DAY, e.ACTIVE_YN, e.DT_ID },
             cancellationToken: ct));
     }
 

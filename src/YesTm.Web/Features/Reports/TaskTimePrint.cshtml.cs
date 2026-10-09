@@ -33,7 +33,7 @@ public class TaskTimePrintModel : PageModel
         var parts = new List<string>();
         var f = FilterField == ReportFilterField.All ? "All fields" : FilterField.ToString();
         if (!string.IsNullOrWhiteSpace(Search)) parts.Add($"{f}: \"{Search}\"");
-        if (DateFrom is { } df) parts.Add($"from {df:dd-MMM-yyyy}");
+        if (DateFrom is { } df) parts.Add($"work date from {df:dd-MMM-yyyy}");
         if (DateTo is { } dt) parts.Add($"to {dt:dd-MMM-yyyy}");
         parts.Add($"sorted by {SortBy}{(SortDesc ? " (desc)" : "")}");
         return string.Join(" · ", parts);

@@ -1,0 +1,386 @@
+@page
+@model YesTm.Web.Features.FieldService.EntryModel
+@{
+    ViewData["Title"] = "Field Service Report";
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css" />
+    <style>
+        .fsr-day td { background: var(--bs-light, #f4f6f9); font-weight: 600; }
+        .seg-badge { font-size: .72rem; padding: .1rem .45rem; border-radius: .6rem; }
+        .seg-TRAVEL { background: #fff4e0; color: #9a5b00; }
+        .seg-WORK { background: #e3f1ff; color: #0b5cad; }
+        .crew-chk { min-width: 180px; }
+    </style>
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-truck-pickup"></i></span>
+            @(Model.IsEditMode ? $"Field Service Report {Model.SheetNo}" : "New Field Service Report")</h1>
+        <p class="page-sub">Field job time sheet — <strong>one report per job</strong>. Add the crew, then book each day's <strong>Travel</strong> and <strong>Work</strong> segments (one entry can apply to the whole crew). Hours split into Normal / OT automatically; food is entered per day.</p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (Model.IsEditMode)
+        {
+            <a asp-page="/FieldService/Print" asp-route-tsId="@Model.TsId" target="_blank" class="btn btn-outline-secondary"><i class="fa-solid fa-print me-2"></i>Print FSR</a>
+        }
+        <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Time Sheets</a>
+    </div>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable — lookups are empty and posting is unavailable.</div>
+}
+
+<form method="post" id="fsrForm">
+    <div asp-validation-summary="All" class="alert alert-danger py-2"></div>
+    @if (Model.ConflictingSheet is not null)
+    {
+        <div class="alert alert-warning d-flex align-items-center justify-content-between">
+            <span><i class="fa-solid fa-file-circle-exclamation me-2"></i>Job <strong>@Model.ConflictingSheet.TS_JOB_CODE</strong> already has <strong>@Model.ConflictingSheet.TS_SHEET_NO</strong>.</span>
+            <a asp-page="/FieldService/Entry" asp-route-tsId="@Model.ConflictingSheet.TS_ID" class="btn btn-sm btn-warning">Open it</a>
+        </div>
+    }
+    <input asp-for="TsId" type="hidden" />
+
+    <!-- ============ Job / machine ============ -->
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-file-lines"></i> Job &amp; Machine</div>
+        <div class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label">Sheet No</label>
+                <input class="form-control field-auto" value="@(Model.IsEditMode ? Model.SheetNo : "Auto Generated")" disabled />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">FSR No (paper)</label>
+                <input asp-for="Report.ReportNo" class="form-control" maxlength="25" placeholder="e.g. 0346" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Report Date</label>
+                <input asp-for="Report.ReportDate" type="date" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Posting Date <span class="req">*</span></label>
+                <input asp-for="Header.PostingDate" type="date" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Field Job / Work Order <span class="req">*</span></label>
+                <select asp-for="Header.JobCode" id="jobSelect" class="form-select" disabled="@(Model.IsEditMode ? "disabled" : null)">
+                    <option value="">— Select Field Job —</option>
+                    @foreach (var j in Model.Jobs)
+                    {
+                        Model.ExistingSheetNos.TryGetValue(j.MTJ_JOB_CODE, out var existingSheet);
+                        <option value="@j.MTJ_JOB_CODE" data-sheet-no="@existingSheet">@j.MTJ_JOB_CODE — @j.MTJ_JOB_DESC@(existingSheet is null ? "" : $"  ✓ {existingSheet}")</option>
+                    }
+                </select>
+                @if (Model.IsEditMode)
+                {
+                    <input type="hidden" asp-for="Header.JobCode" />
+                }
+                <span class="text-muted small">Only jobs with location <strong>Field</strong>. Picking one loads its details (or opens its existing report ✓).</span>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Customer <span class="badge-soft badge-status">auto</span></label>
+                <input asp-for="Header.CustomerName" class="form-control field-auto" readonly />
+                <input asp-for="Header.IndustryCode" type="hidden" id="industryCode" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Make <span class="badge-soft badge-status">auto</span></label>
+                <input asp-for="Header.Brand" class="form-control field-auto" readonly />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Equipment <span class="badge-soft badge-status">auto</span></label>
+                <input asp-for="Header.EquipmentType" class="form-control field-auto" readonly />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Serial <span class="badge-soft badge-status">auto</span></label>
+                <input asp-for="Header.SerialNo" class="form-control field-auto" readonly />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Type of Service <span class="badge-soft badge-status">auto</span></label>
+                <input asp-for="Header.ServiceType" class="form-control field-auto" readonly />
+            </div>
+
+            <div class="col-md-2"><label class="form-label">OEM</label><input asp-for="Report.Oem" class="form-control" maxlength="100" /></div>
+            <div class="col-md-2"><label class="form-label">Model</label><input asp-for="Report.Model" class="form-control" maxlength="100" /></div>
+            <div class="col-md-2"><label class="form-label">SMU (Hrs)</label><input asp-for="Report.SmuHours" type="number" step="0.1" min="0" class="form-control" /></div>
+            <div class="col-md-2"><label class="form-label">Fleet No</label><input asp-for="Report.FleetNo" class="form-control" maxlength="50" /></div>
+            <div class="col-md-2"><label class="form-label">Job Type</label><input asp-for="Report.JobType" class="form-control" maxlength="50" /></div>
+            <div class="col-md-2"><label class="form-label">TAI Report</label><input asp-for="Report.TaiReport" class="form-control" maxlength="50" /></div>
+
+            <div class="col-md-3">
+                <label class="form-label">Work / Labour Type <span class="req">*</span></label>
+                <select asp-for="Header.WorkTypeCode" class="form-select">
+                    <option value="">— Select —</option>
+                    @foreach (var w in Model.WorkTypes)
+                    {
+                        <option value="@w.WORK_TYPE_CODE">@w.WORK_TYPE_NAME</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Job Status <span class="req">*</span></label>
+                <select asp-for="Header.JobStatus" class="form-select">
+                    <option>In Progress</option><option>Completed</option><option>On Hold</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="form-check"><input asp-for="Report.UnderWarranty" class="form-check-input" /><label asp-for="Report.UnderWarranty" class="form-check-label">Under Warranty</label></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ Contact + vehicle ============ -->
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="content-card h-100">
+                <div class="section-h"><i class="fa-solid fa-address-card"></i> Customer Contact</div>
+                <div class="row g-3">
+                    <div class="col-12"><label class="form-label">Job Site</label><input asp-for="Report.JobSite" class="form-control" maxlength="200" placeholder="e.g. Qit bit — customer site" /></div>
+                    <div class="col-md-6"><label class="form-label">Contact Person</label><input asp-for="Report.ContactPerson" class="form-control" maxlength="100" /></div>
+                    <div class="col-md-6"><label class="form-label">Position</label><input asp-for="Report.ContactPosition" class="form-control" maxlength="100" /></div>
+                    <div class="col-md-6"><label class="form-label">Telephone</label><input asp-for="Report.ContactPhone" class="form-control" maxlength="50" /></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="content-card h-100">
+                <div class="section-h"><i class="fa-solid fa-car-side"></i> Transport Vehicle</div>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Plate No</label><input asp-for="Report.PlateNo" class="form-control" maxlength="30" /></div>
+                    <div class="col-md-8"><label class="form-label">Driver Name</label><input asp-for="Report.DriverName" class="form-control" maxlength="100" /></div>
+                    <div class="col-md-3"><label class="form-label">KM-Start</label><input asp-for="Report.KmStart" id="kmStart" type="number" step="0.1" min="0" class="form-control" /></div>
+                    <div class="col-md-3"><label class="form-label">KM-End</label><input asp-for="Report.KmEnd" id="kmEnd" type="number" step="0.1" min="0" class="form-control" /></div>
+                    <div class="col-md-2"><label class="form-label">Total KM</label><input id="kmTotal" class="form-control field-auto" readonly /></div>
+                    <div class="col-md-2"><label class="form-label">Rate / KM</label><input asp-for="Report.KmRate" id="kmRate" type="number" step="0.001" min="0" class="form-control" /></div>
+                    <div class="col-md-2"><label class="form-label">Vehicle Cost</label><input id="kmCost" class="form-control field-auto fw-semibold" readonly /></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ Crew ============ -->
+    <div class="content-card mt-3">
+        <div class="section-h"><i class="fa-solid fa-people-group"></i> Crew (Employees)</div>
+        <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-5">
+                <label class="form-label">Technician</label>
+                <select id="crewTech" class="form-select">
+                    <option value="">— Select Technician —</option>
+                    @foreach (var t in Model.Technicians)
+                    {
+                        <option value="@t.PEMP_EMP_CODE" data-name="@t.PEMP_EMP_NAME">@t.PEMP_EMP_CODE — @t.PEMP_EMP_NAME</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">FA Code</label>
+                <input id="crewFa" class="form-control" maxlength="30" />
+            </div>
+            <div class="col-md-2">
+                <button type="button" id="crewAdd" class="btn btn-outline-primary w-100"><i class="fa-solid fa-user-plus me-1"></i>Add</button>
+            </div>
+        </div>
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th style="width:40px">#</th><th>Employee</th><th>FA Code</th><th class="text-num">Work h</th><th class="text-num">Travel h</th><th class="text-num">Idle h</th><th class="text-num">Food</th><th style="width:50px"></th></tr></thead>
+            <tbody id="crewBody"></tbody>
+        </table>
+        <div id="crewEmpty" class="grid-empty py-2">No crew yet — add the technicians on this trip.</div>
+    </div>
+
+    <!-- ============ Segments ============ -->
+    <div class="content-card">
+        <div class="section-h">
+            <i class="fa-solid fa-calendar-week"></i> Day-wise Segments
+            <button type="button" id="addSegBtn" class="btn btn-primary btn-sm ms-auto"><i class="fa-solid fa-plus me-1"></i> Add Segment</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle tm-lines">
+                <thead>
+                    <tr>
+                        <th>Segment</th><th>Time</th><th>Task</th><th>Technician</th>
+                        <th class="text-num">Lunch</th><th class="text-num">Idle</th><th class="text-num">Net</th>
+                        <th class="text-num">Normal</th><th class="text-num">OT</th><th class="text-num">Labour</th>
+                        <th class="text-num">Food</th><th class="text-num">Total</th><th style="width:110px"></th>
+                    </tr>
+                </thead>
+                <tbody id="segBody"></tbody>
+            </table>
+        </div>
+        <div id="segEmpty" class="grid-empty"><i class="fa-solid fa-inbox fa-lg d-block mb-2"></i>No segments yet. Click <strong>Add Segment</strong>.</div>
+    </div>
+
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-chart-simple"></i> Summary</div>
+        <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-icon bg-grad-blue"><i class="fa-solid fa-screwdriver-wrench"></i></div><div class="kpi-val" id="sWork">0.00</div><div class="kpi-lbl">Work Hrs (net)</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-amber"><i class="fa-solid fa-route"></i></div><div class="kpi-val" id="sTravel">0.00</div><div class="kpi-lbl">Travel Hrs</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-purple"><i class="fa-solid fa-hourglass"></i></div><div class="kpi-val" id="sIdle">0.00</div><div class="kpi-lbl">Idle Hrs</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-amber"><i class="fa-solid fa-business-time"></i></div><div class="kpi-val" id="sSplit">0.0 / 0.0</div><div class="kpi-lbl">Normal / OT Hrs</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-green"><i class="fa-solid fa-coins"></i></div><div class="kpi-val" id="sLabour">0.00</div><div class="kpi-lbl">Labour Cost</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-purple"><i class="fa-solid fa-utensils"></i></div><div class="kpi-val" id="sFood">0.00</div><div class="kpi-lbl">Food</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-blue"><i class="fa-solid fa-car-side"></i></div><div class="kpi-val" id="sVehicle">0.00</div><div class="kpi-lbl">Vehicle Cost</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-green"><i class="fa-solid fa-sack-dollar"></i></div><div class="kpi-val" id="sTotal">0.00</div><div class="kpi-lbl">Trip Total Cost</div></div>
+        </div>
+    </div>
+
+    <!-- ============ Narrative ============ -->
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-stethoscope"></i> Service Details</div>
+        <div class="row g-3">
+            <div class="col-12"><label class="form-label">Customer Complaint</label><textarea asp-for="Report.Complaint" class="form-control" rows="2" maxlength="2000"></textarea></div>
+            <div class="col-12"><label class="form-label">Problems Found</label><textarea asp-for="Report.ProblemsFound" class="form-control" rows="2" maxlength="2000"></textarea></div>
+            <div class="col-12"><label class="form-label">Problem Causes</label><textarea asp-for="Report.ProblemCauses" class="form-control" rows="2" maxlength="2000"></textarea></div>
+            <div class="col-12"><label class="form-label">How Was the Problem Corrected</label><textarea asp-for="Report.Correction" class="form-control" rows="2" maxlength="2000"></textarea></div>
+            <div class="col-12"><label class="form-label">Other Items That Require Attention</label><textarea asp-for="Report.OtherItems" class="form-control" rows="2" maxlength="2000"></textarea></div>
+            <div class="col-md-3"><div class="form-check"><input asp-for="Report.JobCompleted" class="form-check-input" /><label asp-for="Report.JobCompleted" class="form-check-label">Job Completed</label></div></div>
+            <div class="col-md-4"><div class="form-check"><input asp-for="Report.BroughtToWorkshop" class="form-check-input" /><label asp-for="Report.BroughtToWorkshop" class="form-check-label">Machine Brought to Workshop</label></div></div>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <div class="section-h"><i class="fa-solid fa-signature"></i> Sign-off</div>
+        <div class="row g-3">
+            <div class="col-md-4"><label class="form-label">Service Engineer</label><input asp-for="Report.ServiceEngineer" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label">Service Manager</label><input asp-for="Report.ServiceManager" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label">Date</label><input asp-for="Report.SignDate" type="date" class="form-control" /></div>
+            <div class="col-12"><label class="form-label">Customer Comments</label><textarea asp-for="Report.CustomerComments" class="form-control" rows="2" maxlength="1000"></textarea></div>
+            <div class="col-md-4"><label class="form-label">Customer Representative</label><input asp-for="Report.CustomerRep" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label">Position</label><input asp-for="Report.CustomerRepPosition" class="form-control" maxlength="100" /></div>
+            <div class="col-md-4"><label class="form-label">Date</label><input asp-for="Report.CustomerSignDate" type="date" class="form-control" /></div>
+            <div class="col-12"><label class="form-label">Internal Remarks</label><textarea asp-for="Header.Remarks" class="form-control" rows="2" maxlength="1000"></textarea></div>
+        </div>
+    </div>
+
+    <div id="hiddenInputs"></div>
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>@(Model.IsEditMode ? "Update Report" : "Save / Post")</button>
+        <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-rotate-left me-2"></i>Cancel</a>
+        @if (Model.IsEditMode && Model.IsAdmin)
+        {
+            <button type="submit" asp-page="/TimeBooking/Entry" asp-page-handler="Void" asp-route-tsId="@Model.TsId"
+                    class="btn btn-outline-danger ms-auto" formnovalidate
+                    onclick="return confirm('Void this field service report? It will be removed from the active list.');">
+                <i class="fa-solid fa-ban me-2"></i>Void</button>
+        }
+    </div>
+</form>
+
+<!-- ===================== ADD SEGMENT MODAL ===================== -->
+<div class="modal fade" id="segModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="segTitle"><i class="fa-solid fa-plus me-2 text-primary"></i>Add Segment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger py-2 d-none" id="segError"></div>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Date <span class="req">*</span></label>
+                        <input id="g_date" class="form-control" placeholder="Select date" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Segment <span class="req">*</span></label>
+                        <select id="g_type" class="form-select">
+                            <option value="WORK">Work</option>
+                            <option value="TRAVEL">Travel</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="g_taskWrap">
+                        <label class="form-label">Task <span class="req">*</span></label>
+                        <select id="g_task" class="form-select">
+                            <option value="">— Select Task —</option>
+                            @foreach (var t in Model.Tasks)
+                            {
+                                <option value="@t.TASK_CODE" data-name="@t.TASK_NAME" data-skill="@t.DEFAULT_SKILL" data-std="@t.STD_HOURS.ToString(inv)">@t.TASK_NAME</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2"><label class="form-label">From <span class="req">*</span></label><input id="g_start" class="form-control" placeholder="08:00" /></div>
+                    <div class="col-md-2">
+                        <label class="form-label">To <span class="req">*</span></label><input id="g_end" class="form-control" placeholder="17:00" />
+                        <span class="text-muted small" id="g_overnight" style="display:none"><i class="fa-solid fa-moon me-1"></i>next day</span>
+                    </div>
+                    <div class="col-md-2"><label class="form-label">Lunch (hh:mm)</label><input id="g_lunch" class="form-control" placeholder="00:30" /></div>
+                    <div class="col-md-2"><label class="form-label">Idle Hrs</label><input id="g_idle" type="number" step="0.25" min="0" class="form-control" /></div>
+                    <div class="col-md-4"><label class="form-label">Idle Reason</label><input id="g_idleReason" class="form-control" maxlength="200" list="idleReasons" placeholder="waiting for parts…" /></div>
+                    <datalist id="idleReasons">
+                        <option value="Waiting for parts"></option><option value="Customer not ready"></option>
+                        <option value="Work permit / safety"></option><option value="Weather"></option><option value="Waiting for equipment / tools"></option>
+                    </datalist>
+                </div>
+
+                <div class="section-h mt-4"><i class="fa-solid fa-people-group"></i> Technicians <span class="text-muted small fw-normal ms-2" id="g_techHint">tick everyone this segment applies to — one line per technician</span></div>
+                <div id="g_techs" class="d-flex flex-wrap gap-3"></div>
+
+                <div class="section-h mt-4">
+                    <i class="fa-solid fa-calculator"></i> Hours &amp; Cost <span class="text-muted small fw-normal ms-2">per technician — adjust if needed</span>
+                    <span id="g_calcStatus" class="ms-auto small text-muted"></span>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-2"><label class="form-label">Net Hrs</label><input id="g_net" class="form-control field-auto" readonly /></div>
+                    <div class="col-md-2"><label class="form-label">Normal Hrs</label><input id="g_normal" type="number" step="0.25" min="0" class="form-control g-edit" data-key="normal" /></div>
+                    <div class="col-md-2"><label class="form-label">OT Hrs</label><input id="g_ot" type="number" step="0.25" min="0" class="form-control g-edit" data-key="ot" /></div>
+                    <div class="col-md-2"><label class="form-label">Rate</label><input id="g_rate" type="number" step="0.01" min="0" class="form-control g-edit" data-key="rate" /></div>
+                    <div class="col-md-2"><label class="form-label">OT Rate</label><input id="g_otrate" type="number" step="0.01" min="0" class="form-control g-edit" data-key="otRate" /></div>
+                    <div class="col-md-2"><label class="form-label">Labour Cost</label><input id="g_cost" type="number" step="0.01" min="0" class="form-control g-edit" data-key="cost" /></div>
+                    <div class="col-md-3">
+                        <label class="form-label">Food (per technician)</label><input id="g_food" type="number" step="0.01" min="0" class="form-control" />
+                        <span class="text-muted small">Enter the day's food once (e.g. on the first segment of the day).</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="segSave"><i class="fa-solid fa-circle-plus me-2"></i><span id="segSaveText">Add to Grid</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+    <script>
+        window.FS = {
+            duty: { start: "@Model.Duty.DUTY_START", end: "@Model.Duty.DUTY_END", lunch: @Model.Duty.DEFAULT_LUNCH_HOURS.ToString(inv) },
+            postingDate: "@Model.Header.PostingDate.ToString("yyyy-MM-dd")",
+            isEdit: @(Model.IsEditMode ? "true" : "false"),
+            urls: {
+                calcLine: "@Html.Raw(Url.Page("/TimeBooking/Entry", "CalcLine"))",
+                self: "@Html.Raw(Url.Page("/FieldService/Entry"))"
+            },
+            crew: [
+                @foreach (var c in Model.Crew)
+                {
+                    @:{ code: "@Html.Raw(Js(c.EmpCode))", name: "@Html.Raw(Js(c.EmpName))", fa: "@Html.Raw(Js(c.FaCode))" },
+                }
+            ],
+            lines: [
+                @foreach (var l in Model.Lines)
+                {
+                    @:{ type: "@l.SegmentType", workDate: "@l.WorkDate.ToString("yyyy-MM-dd")", startTime: "@l.StartTime", endTime: "@l.EndTime",
+                    @:  lunch: @l.LunchHours.ToString(inv), idle: @l.IdleHours.ToString(inv), idleReason: "@Html.Raw(Js(l.IdleReason))",
+                    @:  taskCode: "@Html.Raw(Js(l.TaskCode))", taskName: "@Html.Raw(Js(l.TaskName))", stdHours: @l.StdHours.ToString(inv),
+                    @:  techCode: "@Html.Raw(Js(l.TechCode))", techName: "@Html.Raw(Js(l.TechName))", skill: "@Html.Raw(Js(l.Skill))",
+                    @:  net: @((l.NormalHours + l.OtHours).ToString(inv)), normal: @l.NormalHours.ToString(inv), ot: @l.OtHours.ToString(inv),
+                    @:  rate: @l.Rate.ToString(inv), otRate: @l.OtRate.ToString(inv), cost: @l.LabourCost.ToString(inv), food: @l.FoodAllowance.ToString(inv),
+                    @:  travelSite: "@Html.Raw(Js(l.TravelSite))", travelStart: "@l.TravelStart", travelEnd: "@l.TravelEnd", travelHours: @l.TravelHours.ToString(inv) },
+                }
+            ]
+        };
+    </script>
+    <script src="~/js/field-service.js" asp-append-version="true"></script>
+}
+
+@functions {
+    static string Js(string? s) => string.IsNullOrEmpty(s) ? "" :
+        s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("<", "\\u003c").Replace("\r", "").Replace("\n", "\\n");
+}

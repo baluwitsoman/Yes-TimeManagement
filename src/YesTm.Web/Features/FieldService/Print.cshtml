@@ -1,0 +1,177 @@
+@page
+@model YesTm.Web.Features.FieldService.PrintModel
+@{
+    Layout = null;
+    var s = Model.Sheet;
+    var r = Model.Report;
+    string D(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "";
+    string Box(string? yn) => yn == "Y" ? "☑" : "☐";
+    var hrs = Model.Hours;
+    var totNormal = hrs.Sum(h => h.Normal);
+    var totOt = hrs.Sum(h => h.Ot);
+    var labour = hrs.Sum(h => h.Labour);
+    var food = hrs.Sum(h => h.Food);
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Field Service Report @(r.FR_REPORT_NO ?? s.TS_SHEET_NO)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: "Times New Roman", Georgia, serif; color: #000; margin: 18px; font-size: 11px; }
+        .toolbar { margin-bottom: 10px; font-family: "Segoe UI", Arial, sans-serif; }
+        .toolbar button { padding: 6px 14px; font-size: 13px; cursor: pointer; }
+        .head { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 6px; }
+        .head .co { text-align: center; flex: 1; }
+        .head .co .ar { font-size: 15px; font-weight: bold; }
+        .head .co .en { font-size: 18px; font-weight: bold; letter-spacing: .3px; }
+        .titlebar { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 8px; align-items: center; margin: 8px 0; }
+        .titlebar h1 { text-align: center; font-size: 16px; margin: 0; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { border: 1px solid #000; padding: 2px 5px; vertical-align: top; height: 19px; }
+        th.bar, td.bar { background: #000; color: #fff; font-weight: bold; font-style: italic; text-align: center; }
+        td.lbl { font-weight: bold; font-size: 10px; width: 30%; white-space: nowrap; }
+        .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+        .grid-seg { display: grid; grid-template-columns: 1.1fr 1.1fr 1.8fr; gap: 6px; margin-bottom: 6px; }
+        .num { text-align: right; white-space: nowrap; }
+        .ctr { text-align: center; }
+        .narr td { height: 44px; }
+        .narr .h { font-weight: bold; font-size: 10px; display: block; }
+        .sig td { height: 46px; }
+        .small { font-size: 9.5px; }
+        .foot { text-align: center; font-size: 10px; font-weight: bold; margin-top: 8px; }
+        .cost td { font-family: "Segoe UI", Arial, sans-serif; font-size: 10px; }
+        @@media print { .toolbar { display: none; } body { margin: 0; } }
+        @@page { size: A4 portrait; margin: 8mm; }
+    </style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div>
+
+<div class="head">
+    <div class="small"><strong>Allison Transmission</strong><br /><strong>DANA SPICER</strong></div>
+    <div class="co"><div class="ar">خدمات المعدات الصفراء ش.م.م</div><div class="en">Yellow Equipment Services LLC</div></div>
+    <div class="small"><strong>FPT</strong><br />Powertrain Technologies</div>
+</div>
+
+<div class="titlebar">
+    <table><tr><td class="bar" style="width:40%">DATE</td><td>@D(r.FR_REPORT_DATE ?? s.TS_POSTING_DATE)</td></tr></table>
+    <h1>FIELD SERVICE REPORT</h1>
+    <table><tr><td class="bar" style="width:40%">No.</td><td>@(r.FR_REPORT_NO ?? s.TS_SHEET_NO)</td></tr></table>
+</div>
+
+<div class="grid3">
+    <table>
+        <tr><td class="bar" colspan="2">CUSTOMER</td></tr>
+        <tr><td class="lbl">NAME</td><td>@s.TS_CUSTOMER_NAME</td></tr>
+        <tr><td class="lbl">JOB SITE</td><td>@r.FR_JOB_SITE</td></tr>
+        <tr><td class="lbl">CONTACT PERSON</td><td>@r.FR_CONTACT_PERSON</td></tr>
+        <tr><td class="lbl">POSITION</td><td>@r.FR_CONTACT_POSITION</td></tr>
+        <tr><td class="lbl">TELEPHONE</td><td>@r.FR_CONTACT_PHONE</td></tr>
+    </table>
+    <table>
+        <tr><td class="bar" colspan="2">MACHINE / ENGINE</td></tr>
+        <tr><td class="lbl">OEM</td><td>@r.FR_OEM</td></tr>
+        <tr><td class="lbl">MAKE</td><td>@s.TS_BRAND</td></tr>
+        <tr><td class="lbl">MODEL</td><td>@(r.FR_MODEL ?? s.TS_EQUIPMENT_TYPE)</td></tr>
+        <tr><td class="lbl">SERIAL</td><td>@s.TS_SERIAL_NO</td></tr>
+        <tr><td class="lbl">SMU (Hrs.)</td><td>@r.FR_SMU_HOURS?.ToString("0.#")</td></tr>
+    </table>
+    <table>
+        <tr><td class="bar" colspan="2">WORK ORDER</td></tr>
+        <tr><td class="lbl">WORK ORDER NO.</td><td>@s.TS_JOB_CODE</td></tr>
+        <tr><td class="lbl">UNDER WARRANTY</td><td class="ctr">@Box(r.FR_UNDER_WARRANTY_YN)</td></tr>
+        <tr><td class="lbl">TAI REPORT</td><td>@r.FR_TAI_REPORT</td></tr>
+        <tr><td class="lbl">JOB TYPE</td><td>@(r.FR_JOB_TYPE ?? s.TS_SERVICE_TYPE)</td></tr>
+        <tr><td class="lbl">FLEET NO.</td><td>@r.FR_FLEET_NO</td></tr>
+    </table>
+</div>
+
+<div class="grid-seg">
+    <table>
+        <tr><td class="bar">EMPLOYEE NAME</td><td class="bar" style="width:30%">F.A CODE</td></tr>
+        @foreach (var h in hrs)
+        {
+            <tr><td>@h.Name</td><td>@h.FaCode</td></tr>
+        }
+        @for (var i = hrs.Count; i < 5; i++) { <tr><td>&nbsp;</td><td></td></tr> }
+    </table>
+    <table>
+        <tr><td class="bar" colspan="2">TRANSPORT VEHICLE</td></tr>
+        <tr><td class="lbl">PLATE NO.</td><td>@r.FR_PLATE_NO</td></tr>
+        <tr><td class="lbl">KM-START</td><td>@r.FR_KM_START?.ToString("0.#")</td></tr>
+        <tr><td class="lbl">KM-END</td><td>@r.FR_KM_END?.ToString("0.#")</td></tr>
+        <tr><td class="lbl">TOTAL KMS</td><td>@(r.FR_TOTAL_KM > 0 ? r.FR_TOTAL_KM.ToString("0.#") : "")</td></tr>
+        <tr><td class="lbl">DRIVER NAME</td><td>@r.FR_DRIVER_NAME</td></tr>
+    </table>
+    <table>
+        <tr><td class="bar">SEGMENT</td><td class="bar">FROM</td><td class="bar">TO</td><td class="bar">DURATION</td><td class="bar">DATE</td></tr>
+        @foreach (var g in Model.Segments)
+        {
+            <tr>
+                <td class="small">@(g.Type == "TRAVEL" ? "TRAVEL" : "WORK")@(g.Task is null ? "" : $" – {g.Task}")</td>
+                <td class="ctr">@g.From.ToString("HH:mm")</td>
+                <td class="ctr">@g.To.ToString("HH:mm")</td>
+                <td class="num">@g.Duration.ToString("0.00")</td>
+                <td class="ctr">@g.Date.ToString("dd/MM/yy")</td>
+            </tr>
+        }
+        <tr>
+            <td class="lbl">TOTAL HOURS<br /><span class="small">REG / OT</span></td>
+            <td class="num">@totNormal.ToString("0.00")</td>
+            <td class="num">@totOt.ToString("0.00")</td>
+            <td class="num"><strong>@((totNormal + totOt).ToString("0.00"))</strong></td>
+            <td class="small">all crew</td>
+        </tr>
+    </table>
+</div>
+
+<table class="narr" style="margin-bottom:6px">
+    <tr><td><span class="h">CUSTOMER COMPLAINT</span>@r.FR_COMPLAINT</td></tr>
+    <tr><td><span class="h">PROBLEMS FOUND</span>@r.FR_PROBLEMS_FOUND</td></tr>
+    <tr><td><span class="h">PROBLEM CAUSES</span>@r.FR_PROBLEM_CAUSES</td></tr>
+    <tr><td><span class="h">HOW WAS THE PROBLEM CORRECTED</span>@r.FR_CORRECTION</td></tr>
+    <tr><td><span class="h">OTHER ITEMS THAT REQUIRE ATTENTION</span>@r.FR_OTHER_ITEMS</td></tr>
+</table>
+
+<table style="margin-bottom:6px">
+    <tr>
+        <td class="lbl ctr" style="width:35%">JOB COMPLETED</td><td class="ctr" style="width:12%">@Box(r.FR_JOB_COMPLETED_YN)</td>
+        <td class="lbl ctr">MACHINE BROUGHT TO WORKSHOP</td><td class="ctr" style="width:12%">@Box(r.FR_TO_WORKSHOP_YN)</td>
+    </tr>
+</table>
+
+<table class="sig" style="margin-bottom:6px">
+    <tr><td>@r.FR_SERVICE_ENGINEER</td><td>@r.FR_SERVICE_MANAGER</td><td>@D(r.FR_SIGN_DATE)</td></tr>
+    <tr><td class="lbl ctr" style="height:auto">SERVICE ENGINEER</td><td class="lbl ctr" style="height:auto">SERVICE MANAGER</td><td class="lbl ctr" style="height:auto">DATE</td></tr>
+</table>
+
+<table>
+    <tr><td class="bar" colspan="4">FOR CUSTOMER USE</td></tr>
+    <tr><td class="lbl" style="height:36px">COMMENTS</td><td colspan="3">@r.FR_CUST_COMMENTS</td></tr>
+    <tr><td class="lbl ctr">CUSTOMER REPRESENTATIVE</td><td class="lbl ctr">POSITION</td><td class="lbl ctr">SIGNATURE</td><td class="lbl ctr">DATE</td></tr>
+    <tr style="height:34px"><td>@r.FR_CUST_REP</td><td>@r.FR_CUST_REP_POSITION</td><td></td><td>@D(r.FR_CUST_SIGN_DATE)</td></tr>
+</table>
+
+<p class="foot">Address: Rusayl Industrial Estate, Muscat, Sultanate of Oman</p>
+
+@* Internal costing — screen only, not on the customer copy. *@
+<div class="toolbar">
+    <h3 style="margin:14px 0 4px">Internal: hours &amp; cost by technician (not printed)</h3>
+    <table class="cost">
+        <tr><th>Employee</th><th class="num">Work h</th><th class="num">Travel h</th><th class="num">Idle h</th><th class="num">Normal</th><th class="num">OT</th><th class="num">Labour</th><th class="num">Food</th></tr>
+        @foreach (var h in hrs)
+        {
+            <tr><td>@h.Code — @h.Name</td><td class="num">@h.Work.ToString("N2")</td><td class="num">@h.Travel.ToString("N2")</td><td class="num">@h.Idle.ToString("N2")</td>
+                <td class="num">@h.Normal.ToString("N2")</td><td class="num">@h.Ot.ToString("N2")</td><td class="num">@h.Labour.ToString("N2")</td><td class="num">@h.Food.ToString("N2")</td></tr>
+        }
+        <tr><td><strong>Total</strong> (+ vehicle @r.FR_VEHICLE_COST.ToString("N2"))</td><td class="num">@hrs.Sum(h => h.Work).ToString("N2")</td><td class="num">@hrs.Sum(h => h.Travel).ToString("N2")</td>
+            <td class="num">@hrs.Sum(h => h.Idle).ToString("N2")</td><td class="num">@totNormal.ToString("N2")</td><td class="num">@totOt.ToString("N2")</td>
+            <td class="num">@labour.ToString("N2")</td><td class="num">@food.ToString("N2")</td></tr>
+        <tr><td colspan="6" class="num"><strong>Trip total (labour + food + vehicle)</strong></td><td colspan="2" class="num"><strong>@((labour + food + r.FR_VEHICLE_COST).ToString("N2"))</strong></td></tr>
+    </table>
+</div>
+</body>
+</html>

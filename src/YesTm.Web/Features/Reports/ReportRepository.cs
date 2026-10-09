@@ -26,7 +26,7 @@ public sealed class ReportRepository : IReportRepository
     {
         ReportSortBy.Employee => "l.TL_TECH_NAME",
         ReportSortBy.Customer => "s.TS_CUSTOMER_NAME",
-        ReportSortBy.Date     => "s.TS_POSTING_DATE",
+        ReportSortBy.Date     => "NVL(l.TL_WORK_DATE, TRUNC(l.TL_START_DT))",
         ReportSortBy.Task     => "l.TL_TASK_NAME",
         ReportSortBy.Cost     => "l.TL_LABOUR_COST",
         _                     => "l.TL_JOB_CODE",
@@ -62,7 +62,7 @@ public sealed class ReportRepository : IReportRepository
             SELECT s.TS_SHEET_NO, s.TS_POSTING_DATE, l.TL_JOB_CODE, s.TS_CUSTOMER_NAME,
                    l.TL_TASK_NAME, l.TL_TECH_CODE, l.TL_TECH_NAME, l.TL_SKILL, l.TL_LOCATION,
                    l.TL_START_DT, l.TL_END_DT, l.TL_STD_HOURS, l.TL_NET_HOURS, l.TL_TIME_TYPE,
-                   l.TL_RATE, l.TL_LABOUR_COST, w.WORK_TYPE_NAME, s.TS_JOB_STATUS,
+                   l.TL_RATE, l.TL_LABOUR_COST, w.WORK_TYPE_NAME, s.TS_JOB_STATUS, s.TS_LOCATION,
                    NVL(l.TL_WORK_DATE, TRUNC(l.TL_START_DT)) AS TL_WORK_DATE,
                    NVL(l.TL_LUNCH_HOURS,0)    AS TL_LUNCH_HOURS,
                    NVL(l.TL_NORMAL_HOURS,0)   AS TL_NORMAL_HOURS,
@@ -73,6 +73,8 @@ public sealed class ReportRepository : IReportRepository
                    l.TL_TRAVEL_SITE, l.TL_TRAVEL_START, l.TL_TRAVEL_END,
                    NVL(l.TL_TRAVEL_HOURS,0)   AS TL_TRAVEL_HOURS,
                    NVL(l.TL_OVERRIDE_YN,'N')  AS TL_OVERRIDE_YN,
+                   NVL(l.TL_SEGMENT_TYPE,'WORK') AS TL_SEGMENT_TYPE,
+                   NVL(l.TL_IDLE_HOURS,0)     AS TL_IDLE_HOURS, l.TL_IDLE_REASON,
                    COUNT(*) OVER()                    AS TOTAL_ROWS,
                    SUM(l.TL_NET_HOURS)   OVER()       AS GRAND_NET,
                    SUM(l.TL_LABOUR_COST) OVER()       AS GRAND_COST,
@@ -89,8 +91,10 @@ public sealed class ReportRepository : IReportRepository
                     OR s.TS_CREATION_USER_ID = :scopeUserId
                     OR (:empCode IS NOT NULL AND l.TL_TECH_CODE = :empCode))
               AND  (:term IS NULL OR {filterSql})
-              AND  (:dateFrom   IS NULL OR s.TS_POSTING_DATE >= :dateFrom)
-              AND  (:dateToExcl IS NULL OR s.TS_POSTING_DATE <  :dateToExcl)
+              -- Dates filter the line's WORK date: one sheet per job collects lines over weeks,
+              -- so the sheet's posting date says nothing about when the work was done.
+              AND  (:dateFrom   IS NULL OR NVL(l.TL_WORK_DATE, TRUNC(l.TL_START_DT)) >= :dateFrom)
+              AND  (:dateToExcl IS NULL OR NVL(l.TL_WORK_DATE, TRUNC(l.TL_START_DT)) <  :dateToExcl)
             ORDER  BY {orderBy}"
             + (paged ? "\n            OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY" : "");
 

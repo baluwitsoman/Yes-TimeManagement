@@ -4,7 +4,13 @@ using YesTm.Web.Common.Data;
 
 namespace YesTm.Web.Features.TimeBooking;
 
-public sealed record LabourRateResult(decimal Rate, decimal OvertimeMultiplier, decimal FoodAllowance);
+public sealed record LabourRateResult(decimal Rate, decimal OvertimeMultiplier, decimal FoodAllowance, decimal KmRate = 0m);
+
+/// <summary>
+/// Extra writes run inside the same transaction as a sheet save/update (e.g. the Field Service Report),
+/// given the open connection, the transaction and the sheet's TS_ID.
+/// </summary>
+public delegate Task SheetChildWriter(IDbConnection conn, IDbTransaction tx, decimal tsId, CancellationToken ct);
 
 public interface ITimeBookingRepository
 {
@@ -25,8 +31,10 @@ public interface ITimeBookingRepository
     Task<DutyTimingDto> GetDutyTimingAsync(CancellationToken ct = default);
     Task<decimal> GetTaskStdHoursAsync(string taskCode, CancellationToken ct = default);
     Task<LabourRateResult> GetLabourRateAsync(string? location, string? industryCode, CancellationToken ct = default);
-    Task<string> SaveTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, CancellationToken ct = default);
-    Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default);
+    Task<string> SaveTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, CancellationToken ct = default,
+        SheetChildWriter? children = null);
+    Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default,
+        SheetChildWriter? children = null);
     Task VoidTimeSheetAsync(decimal tsId, decimal? userId, CancellationToken ct = default);
 }
 
@@ -58,7 +66,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         // both paging and the total needed for the pager.
         const string sql = @"
             SELECT TS_ID, TS_SHEET_NO, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_NAME,
-                   TS_LOCATION, TS_JOB_STATUS, TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST,
+                   TS_LOCATION, NVL(TS_SHEET_TYPE,'STANDARD') AS TS_SHEET_TYPE,
+                   TS_JOB_STATUS, TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST,
                    NVL(TS_TOTAL_COST, TS_TOTAL_LABOUR_COST) AS TS_TOTAL_COST,
                    COUNT(*) OVER() AS TOTAL_ROWS
             FROM   TM_TIME_SHEET
@@ -100,7 +109,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         const string headerSql = @"
             SELECT TS_ID, TS_SHEET_NO, TS_CREATION_USER_ID, TS_POSTING_DATE, TS_JOB_CODE, TS_CUSTOMER_CODE, TS_CUSTOMER_NAME,
                    TS_INDUSTRY_CODE, TS_BRAND, TS_EQUIPMENT_TYPE, TS_SERVICE_TYPE, TS_SERIAL_NO,
-                   TS_JOB_OPENING_DATE, TS_LOCATION, TS_WORK_TYPE_CODE, TS_JOB_STATUS, TS_REMARKS
+                   TS_JOB_OPENING_DATE, TS_LOCATION, TS_WORK_TYPE_CODE, TS_JOB_STATUS, TS_REMARKS,
+                   NVL(TS_SHEET_TYPE,'STANDARD') AS TS_SHEET_TYPE
             FROM   TM_TIME_SHEET
             WHERE  TS_ID = :tsId AND NVL(TS_ACTIVE_YN,'Y') = 'Y'";
         const string linesSql = @"
@@ -112,7 +122,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                    NVL(TL_OT_RATE,0) AS TL_OT_RATE, NVL(TL_FOOD_ALLOWANCE,0) AS TL_FOOD_ALLOWANCE,
                    NVL(TL_TOTAL_COST, TL_LABOUR_COST) AS TL_TOTAL_COST,
                    TL_TRAVEL_SITE, TL_TRAVEL_START, TL_TRAVEL_END, NVL(TL_TRAVEL_HOURS,0) AS TL_TRAVEL_HOURS,
-                   NVL(TL_OVERRIDE_YN,'N') AS TL_OVERRIDE_YN, TL_MERGED_FROM_TS_ID
+                   NVL(TL_OVERRIDE_YN,'N') AS TL_OVERRIDE_YN, TL_MERGED_FROM_TS_ID,
+                   NVL(TL_SEGMENT_TYPE,'WORK') AS TL_SEGMENT_TYPE, NVL(TL_IDLE_HOURS,0) AS TL_IDLE_HOURS, TL_IDLE_REASON
             FROM   TM_TIME_LINE
             WHERE  TL_TS_ID = :tsId
             ORDER  BY TL_LINE_NO";
@@ -189,7 +200,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                b.MCMD_ENTITY_DESC AS BRAND_DESC,
                e.MET_EQUIPMENT_TYPE_DESC AS EQUIPMENT_TYPE_DESC,
                s.MST_SERVICE_TYPE_DESC AS SERVICE_TYPE_DESC,
-               j.MTJ_SERIAL_NO, j.MTJ_JOB_OPENING_DATE
+               j.MTJ_SERIAL_NO, j.MTJ_JOB_OPENING_DATE, j.MTJ_CONTACT_PERSON, j.MTJ_CONTACT_PHONE
         FROM   MTL_TRANSACTION_JOB_OTHER_DTLS j
         LEFT JOIN MMM_PARTY_DETAILS p
                ON p.MPD_PARTY_CODE = j.MTJ_PARTY_CODE AND p.MPD_PARTY_TYPE = 'AR'
@@ -230,7 +241,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         const string sql = @"
             SELECT PEMP_EMP_CODE, PEMP_EMP_NAME
             FROM   PPM_EMPLOYEE_DETAILS
-            WHERE  PEMP_EMP_CODE IS NOT NULL
+            WHERE  PEMP_EMP_CODE IS NOT NULL and pemp_emp_active='Y'
             ORDER  BY PEMP_EMP_NAME";
 
         using var conn = await _db.CreateOpenConnectionAsync(ct);
@@ -266,15 +277,19 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
 
     public async Task<DutyTimingDto> GetDutyTimingAsync(CancellationToken ct = default)
     {
-        const string sql = @"
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        // Std hours/day arrives with db/10; until then the default of 8 h applies.
+        var stdCol = await SchemaInfo.HasColumnAsync(conn, "TM_DUTY_TIMING", "DT_STD_HOURS_PER_DAY", ct)
+            ? "NVL(DT_STD_HOURS_PER_DAY, 8)" : "8";
+        var sql = $@"
             SELECT DT_START AS DUTY_START, DT_END AS DUTY_END,
-                   DT_LUNCH_HOURS AS DEFAULT_LUNCH_HOURS, DT_WEEKEND_DAYS AS WEEKEND_DAYS
+                   DT_LUNCH_HOURS AS DEFAULT_LUNCH_HOURS, DT_WEEKEND_DAYS AS WEEKEND_DAYS,
+                   {stdCol} AS STD_HOURS_PER_DAY
             FROM   TM_DUTY_TIMING
             WHERE  NVL(ACTIVE_YN,'Y') = 'Y'
             ORDER  BY DT_ID
             FETCH FIRST 1 ROWS ONLY";
 
-        using var conn = await _db.CreateOpenConnectionAsync(ct);
         var row = await conn.QueryFirstOrDefaultAsync<DutyTimingDto>(new CommandDefinition(sql, cancellationToken: ct));
         return row ?? new DutyTimingDto();
     }
@@ -290,7 +305,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
     public async Task<LabourRateResult> GetLabourRateAsync(string? location, string? industryCode, CancellationToken ct = default)
     {
         const string sql = @"
-            SELECT LR_RATE, NVL(LR_OT_MULTIPLIER, 1.5) AS LR_OT_MULTIPLIER, NVL(LR_FOOD_ALLOWANCE, 0) AS LR_FOOD_ALLOWANCE
+            SELECT LR_RATE, NVL(LR_OT_MULTIPLIER, 1.5) AS LR_OT_MULTIPLIER, NVL(LR_FOOD_ALLOWANCE, 0) AS LR_FOOD_ALLOWANCE,
+                   NVL(LR_KM_RATE, 0) AS LR_KM_RATE
             FROM   TM_LABOUR_RATE
             WHERE  UPPER(LR_LOCATION) = UPPER(:location)
               AND  (LR_INDUSTRY_CODE = :industryCode OR :industryCode IS NULL)
@@ -299,9 +315,9 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             FETCH FIRST 1 ROWS ONLY";
 
         using var conn = await _db.CreateOpenConnectionAsync(ct);
-        var row = await conn.QueryFirstOrDefaultAsync<(decimal LR_RATE, decimal LR_OT_MULTIPLIER, decimal LR_FOOD_ALLOWANCE)>(
+        var row = await conn.QueryFirstOrDefaultAsync<(decimal LR_RATE, decimal LR_OT_MULTIPLIER, decimal LR_FOOD_ALLOWANCE, decimal LR_KM_RATE)>(
             new CommandDefinition(sql, new { location, industryCode }, cancellationToken: ct));
-        return new LabourRateResult(row.LR_RATE, row.LR_OT_MULTIPLIER == 0 ? 1.5m : row.LR_OT_MULTIPLIER, row.LR_FOOD_ALLOWANCE);
+        return new LabourRateResult(row.LR_RATE, row.LR_OT_MULTIPLIER == 0 ? 1.5m : row.LR_OT_MULTIPLIER, row.LR_FOOD_ALLOWANCE, row.LR_KM_RATE);
     }
 
     // Shared by create (insert) and edit (delete + re-insert) — every column of a task line.
@@ -312,16 +328,17 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
              TL_NET_HOURS, TL_TIME_TYPE, TL_RATE, TL_LABOUR_COST, TL_JOB_CODE, TL_LOCATION,
              TL_WORK_DATE, TL_NORMAL_HOURS, TL_OT_HOURS, TL_OT_RATE, TL_FOOD_ALLOWANCE, TL_TOTAL_COST,
              TL_TRAVEL_SITE, TL_TRAVEL_START, TL_TRAVEL_END, TL_TRAVEL_HOURS, TL_OVERRIDE_YN, TL_MERGED_FROM_TS_ID,
-             TL_CREATION_DATE)
+             TL_SEGMENT_TYPE, TL_IDLE_HOURS, TL_IDLE_REASON, TL_CREATION_DATE)
         VALUES
             (TM_TIME_LINE_SEQ.NEXTVAL, :TL_TS_ID, :TL_LINE_NO, :TL_TASK_CODE, :TL_TASK_NAME, :TL_STD_HOURS,
              :TL_TECH_CODE, :TL_TECH_NAME, :TL_SKILL, :TL_START_DT, :TL_END_DT, :TL_LUNCH_HOURS,
              :TL_NET_HOURS, :TL_TIME_TYPE, :TL_RATE, :TL_LABOUR_COST, :TL_JOB_CODE, :TL_LOCATION,
              :TL_WORK_DATE, :TL_NORMAL_HOURS, :TL_OT_HOURS, :TL_OT_RATE, :TL_FOOD_ALLOWANCE, :TL_TOTAL_COST,
              :TL_TRAVEL_SITE, :TL_TRAVEL_START, :TL_TRAVEL_END, :TL_TRAVEL_HOURS, :TL_OVERRIDE_YN, :TL_MERGED_FROM_TS_ID,
-             SYSDATE)";
+             NVL(:TL_SEGMENT_TYPE,'WORK'), :TL_IDLE_HOURS, :TL_IDLE_REASON, SYSDATE)";
 
-    public async Task<string> SaveTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, CancellationToken ct = default)
+    public async Task<string> SaveTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, CancellationToken ct = default,
+        SheetChildWriter? children = null)
     {
         using var conn = await _db.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
@@ -340,6 +357,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                      TS_BRAND, TS_EQUIPMENT_TYPE, TS_SERVICE_TYPE, TS_SERIAL_NO, TS_JOB_OPENING_DATE,
                      TS_TOTAL_NET_HOURS, TS_TOTAL_LABOUR_COST, TS_NORMAL_HOURS, TS_OT_HOURS, TS_STD_HOURS,
                      TS_TOTAL_FOOD_ALLOWANCE, TS_TOTAL_TRAVEL_HOURS, TS_TOTAL_COST,
+                     TS_SHEET_TYPE, TS_TOTAL_IDLE_HOURS, TS_VEHICLE_COST,
                      TS_REMARKS, TS_ACTIVE_YN, TS_CREATION_USER_ID, TS_CREATION_DATE)
                 VALUES
                     (:TS_ID, :TS_SHEET_NO, :TS_POSTING_DATE, :TS_JOB_CODE, :TS_CUSTOMER_CODE, :TS_CUSTOMER_NAME,
@@ -347,6 +365,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                      :TS_BRAND, :TS_EQUIPMENT_TYPE, :TS_SERVICE_TYPE, :TS_SERIAL_NO, :TS_JOB_OPENING_DATE,
                      :TS_TOTAL_NET_HOURS, :TS_TOTAL_LABOUR_COST, :TS_NORMAL_HOURS, :TS_OT_HOURS, :TS_STD_HOURS,
                      :TS_TOTAL_FOOD_ALLOWANCE, :TS_TOTAL_TRAVEL_HOURS, :TS_TOTAL_COST,
+                     NVL(:TS_SHEET_TYPE,'STANDARD'), :TS_TOTAL_IDLE_HOURS, :TS_VEHICLE_COST,
                      :TS_REMARKS, 'Y', :TS_CREATION_USER_ID, SYSDATE)";
             await conn.ExecuteAsync(new CommandDefinition(insHeader, header, tx, cancellationToken: ct));
 
@@ -356,6 +375,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                 line.TL_TS_ID = newId;
                 await conn.ExecuteAsync(new CommandDefinition(InsertLineSql, line, tx, cancellationToken: ct));
             }
+
+            if (children is not null) await children(conn, tx, newId, ct);
 
             tx.Commit();
             _logger.LogInformation("Posted time sheet {SheetNo} with {LineCount} line(s), cost {Cost}",
@@ -370,7 +391,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
         }
     }
 
-    public async Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default)
+    public async Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default,
+        SheetChildWriter? children = null)
     {
         using var conn = await _db.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
@@ -390,6 +412,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                     TS_NORMAL_HOURS = :TS_NORMAL_HOURS, TS_OT_HOURS = :TS_OT_HOURS, TS_STD_HOURS = :TS_STD_HOURS,
                     TS_TOTAL_FOOD_ALLOWANCE = :TS_TOTAL_FOOD_ALLOWANCE, TS_TOTAL_TRAVEL_HOURS = :TS_TOTAL_TRAVEL_HOURS,
                     TS_TOTAL_COST = :TS_TOTAL_COST,
+                    TS_SHEET_TYPE = NVL(:TS_SHEET_TYPE,'STANDARD'), TS_TOTAL_IDLE_HOURS = :TS_TOTAL_IDLE_HOURS,
+                    TS_VEHICLE_COST = :TS_VEHICLE_COST,
                     TS_REMARKS = :TS_REMARKS, TS_UPDATE_USER_ID = :TS_UPDATE_USER_ID, TS_UPDATE_DATE = SYSDATE
                 WHERE TS_ID = :TS_ID";
             var affected = await conn.ExecuteAsync(new CommandDefinition(updHeader, header, tx, cancellationToken: ct));
@@ -404,6 +428,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
                 line.TL_TS_ID = header.TS_ID;
                 await conn.ExecuteAsync(new CommandDefinition(InsertLineSql, line, tx, cancellationToken: ct));
             }
+
+            if (children is not null) await children(conn, tx, header.TS_ID, ct);
 
             tx.Commit();
             _logger.LogInformation("Updated time sheet {SheetNo} ({TsId}) — {LineCount} line(s), cost {Cost}",

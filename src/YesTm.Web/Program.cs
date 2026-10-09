@@ -42,6 +42,7 @@ try
             options.Conventions.AllowAnonymousToFolder("/Authentication"); // ...except the login slice
             options.Conventions.AuthorizeFolder("/Masters", Policies.AdminOrAbove); // masters: admin+
             options.Conventions.AuthorizeFolder("/JobCard", Policies.AdminOrAbove); // job cards: admin+
+            options.Conventions.AuthorizeFolder("/Hrms", Policies.AdminOrAbove);    // HRMS sync + code mapping: admin+
         });
 
     // Data access (Dapper over ODP.NET).
@@ -54,7 +55,17 @@ try
     builder.Services.AddScoped<IAdministrationRepository, AdministrationRepository>();
     builder.Services.AddScoped<YesTm.Web.Features.JobCard.IJobCardRepository, YesTm.Web.Features.JobCard.JobCardRepository>();
     builder.Services.AddScoped<YesTm.Web.Features.Reports.IReportRepository, YesTm.Web.Features.Reports.ReportRepository>();
+    builder.Services.AddScoped<YesTm.Web.Features.FieldService.IFieldServiceRepository, YesTm.Web.Features.FieldService.FieldServiceRepository>();
     builder.Services.AddMasterRepositories();
+    builder.Services.AddScoped<YesTm.Web.Features.Reports.IUtilisationService, YesTm.Web.Features.Reports.UtilisationService>();
+
+    // HRMS attendance sync (company 39): typed client, sync service, nightly runner.
+    builder.Services.Configure<YesTm.Web.Features.Hrms.HrmsOptions>(
+        builder.Configuration.GetSection(YesTm.Web.Features.Hrms.HrmsOptions.Section));
+    builder.Services.AddHttpClient<YesTm.Web.Features.Hrms.HrmsClient>();
+    builder.Services.AddScoped<YesTm.Web.Features.Hrms.IHrmsRepository, YesTm.Web.Features.Hrms.HrmsRepository>();
+    builder.Services.AddScoped<YesTm.Web.Features.Hrms.HrmsSyncService>();
+    builder.Services.AddHostedService<YesTm.Web.Features.Hrms.HrmsNightlySync>();
 
     // -----------------------------------------------------------------------
     // Cookie authentication + role policies (USER / ADMIN / SITEADMIN).

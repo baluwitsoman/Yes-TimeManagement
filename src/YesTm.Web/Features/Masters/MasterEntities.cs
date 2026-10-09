@@ -50,6 +50,8 @@ public sealed class TM_LABOUR_RATE
     public decimal? LR_OT_MULTIPLIER { get; set; }
     /// <summary>Default per-line food allowance applied when this rate is picked for a time line.</summary>
     public decimal? LR_FOOD_ALLOWANCE { get; set; }
+    /// <summary>Vehicle cost per km (Field Service Report default).</summary>
+    public decimal? LR_KM_RATE { get; set; }
     public DateTime? LR_EFFECTIVE_FROM { get; set; }
     public string LR_ACTIVE_YN { get; set; } = "Y";
 }
@@ -63,6 +65,8 @@ public sealed class TM_DUTY_TIMING
     public decimal DT_LUNCH_HOURS { get; set; }
     public string? DT_WEEKEND_DAYS { get; set; }
     public decimal? DT_MONTHLY_BENCHMARK { get; set; }
+    /// <summary>One standard working day in hours — the basis of "available hours" (days x hours).</summary>
+    public decimal? DT_STD_HOURS_PER_DAY { get; set; }
     public string ACTIVE_YN { get; set; } = "Y";
 }
 

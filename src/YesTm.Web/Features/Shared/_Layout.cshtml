@@ -58,6 +58,7 @@
                 <a class="nav-link @active("/masters/dutytiming")" asp-page="/Masters/DutyTiming"><i class="fa-solid fa-calendar-day"></i><span>Duty Timing</span></a>
                 <a class="nav-link @active("/masters/task")" asp-page="/Masters/Task"><i class="fa-solid fa-list-check"></i><span>Task Master</span></a>
                 <a class="nav-link @active("/masters/taskstdhours")" asp-page="/Masters/TaskStdHours"><i class="fa-solid fa-stopwatch"></i><span>Task Std Hours</span></a>
+                <a class="nav-link @active("/hrms")" asp-page="/Hrms/Sync"><i class="fa-solid fa-arrows-rotate"></i><span>HRMS Sync &amp; Mapping</span></a>
             }
             else
             {
@@ -66,8 +67,7 @@
 
             <div class="nav-section">Reports</div>
             <a class="nav-link @active("/reports/tasktime")" asp-page="/Reports/TaskTime"><i class="fa-solid fa-table-list"></i><span>Task &amp; Time Report</span></a>
-            <a class="nav-link soon"><i class="fa-solid fa-chart-line"></i><span>Efficiency</span><em>soon</em></a>
-            <a class="nav-link soon"><i class="fa-solid fa-chart-pie"></i><span>Performance KPI</span><em>soon</em></a>
+            <a class="nav-link @active("/reports/utilisation")" asp-page="/Reports/Utilisation"><i class="fa-solid fa-chart-line"></i><span>Utilisation &amp; Efficiency</span></a>
 
             @if (isSiteAdmin)
             {

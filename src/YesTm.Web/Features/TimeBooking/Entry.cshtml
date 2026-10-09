@@ -96,7 +96,7 @@
                     }
                 </select>
                 <span asp-validation-for="Header.JobCode" class="text-danger small"></span>
-                <span class="text-muted small"><i class="fa-regular fa-circle-question me-1"></i>Jobs marked ✓ already have a time sheet — selecting one offers to open it.</span>
+                <span class="text-muted small"><i class="fa-regular fa-circle-question me-1"></i>Jobs marked ✓ already have a time sheet — selecting one offers to open it. Field jobs open the Field Service Report.</span>
             </div>
 
             <div class="col-md-6">
@@ -438,7 +438,8 @@
             jobsByLocation: "@Html.Raw(Url.Page(null, "JobsByLocation"))",
             sheetByJob: "@Html.Raw(Url.Page(null, "SheetByJob"))",
             calcLine: "@Html.Raw(Url.Page(null, "CalcLine"))",
-            entry: "@Html.Raw(Url.Page("/TimeBooking/Entry"))"
+            entry: "@Html.Raw(Url.Page("/TimeBooking/Entry"))",
+            fieldEntry: "@Html.Raw(Url.Page("/FieldService/Entry"))"
         };
         // Seed the grid with the sheet's existing task lines when editing a posted time sheet.
         window.TM_EXISTING_LINES = [

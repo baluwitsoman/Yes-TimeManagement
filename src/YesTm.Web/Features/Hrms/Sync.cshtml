@@ -1,0 +1,148 @@
+@page
+@model YesTm.Web.Features.Hrms.SyncModel
+@using YesTm.Web.Features.Hrms
+@{
+    ViewData["Title"] = "HRMS Sync & Mapping";
+    var o = Model.Options;
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-arrows-rotate"></i></span> HRMS Sync &amp; Employee Mapping</h1>
+        <p class="page-sub">Holidays, weekends, leave, absence and punched hours come from HRMS attendance (company 39) — nobody books them as time.
+            Each TM technician must be <strong>mapped</strong> to his HRMS employee code for the reports to use them.</p>
+    </div>
+    <a asp-page-handler="Export" class="btn btn-outline-success"><i class="fa-solid fa-file-excel me-2"></i>Export Mapping</a>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Sync tables not reachable — run <code>db/10_hrms_attendance.sql</code>.</div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="content-card h-100">
+            <div class="section-h"><i class="fa-solid fa-plug"></i> Connection</div>
+            @if (Model.IsConfigured)
+            {
+                <p class="mb-1"><span class="badge-soft badge-normal">Configured</span> <span class="small text-muted ms-2">@o.BaseUrl/@o.CompanyShortCode</span></p>
+                <p class="small text-muted mb-3">Nightly sync @(o.NightlySyncHour is >= 0 and <= 23 ? $"at {o.NightlySyncHour:00}:00 for the last {o.SyncDaysBack} days" : "off").</p>
+            }
+            else
+            {
+                <div class="alert alert-warning py-2 small mb-3">Not configured. Set <code>TimeManagement:Hrms</code> <code>BaseUrl</code>, <code>CompanyShortCode</code> and <code>ApiKey</code>
+                    in appsettings (the same key as HRMS <code>TmSync:ApiKey</code>).</div>
+            }
+            <form method="post" asp-page-handler="Sync" class="row g-2 align-items-end">
+                <input type="hidden" name="Show" value="@Model.Show" />
+                <div class="col-5"><label class="form-label">From</label><input asp-for="SyncFrom" type="date" class="form-control" /></div>
+                <div class="col-5"><label class="form-label">To</label><input asp-for="SyncTo" type="date" class="form-control" /></div>
+                <div class="col-2"><button class="btn btn-primary w-100" title="Sync now" @(Model.IsConfigured ? "" : "disabled")><i class="fa-solid fa-rotate"></i></button></div>
+            </form>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="content-card h-100">
+            <div class="section-h"><i class="fa-solid fa-clock-rotate-left"></i> Recent syncs</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Started</th><th>Type</th><th>Period</th><th>Status</th><th>Result</th></tr></thead>
+                    <tbody>
+                        @if (Model.Logs.Count == 0) { <tr><td colspan="5" class="grid-empty py-2">No syncs yet.</td></tr> }
+                        @foreach (var l in Model.Logs)
+                        {
+                            <tr>
+                                <td class="text-nowrap small">@l.SL_START?.ToString("dd-MMM HH:mm")</td>
+                                <td class="small">@l.SL_TRIGGER</td>
+                                <td class="text-nowrap small">@l.SL_FROM_DATE?.ToString("dd-MMM") – @l.SL_TO_DATE?.ToString("dd-MMM-yy")</td>
+                                <td><span class="badge-soft @(l.SL_STATUS == "OK" ? "badge-normal" : l.SL_STATUS == "FAILED" ? "badge-ot" : "badge-status")">@l.SL_STATUS</span></td>
+                                <td class="small text-muted">@l.SL_MESSAGE</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content-card mt-3">
+    <div class="section-h">
+        <i class="fa-solid fa-people-arrows"></i> TM technician → HRMS employee
+        <span class="ms-3 small fw-normal">
+            <span class="badge-soft badge-normal">@Model.CountConfirmed confirmed</span>
+            <span class="badge-soft badge-mixed ms-1">@Model.CountSuggested to review</span>
+            <span class="badge-soft badge-ot ms-1">@Model.CountBookedUnmapped booking technicians unmapped</span>
+        </span>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <div class="btn-group btn-group-sm">
+            @foreach (var (key, label) in new[] { ("booked", "Book time"), ("unmapped", "Not confirmed"), ("suggested", "Suggestions"), ("all", "All employees") })
+            {
+                <a asp-route-Show="@key" class="btn @(Model.Show == key ? "btn-primary" : "btn-outline-primary")">@label</a>
+            }
+        </div>
+        <form method="post" asp-page-handler="ConfirmAll" class="d-flex gap-1 align-items-center ms-auto"
+              onsubmit="return confirm('Confirm every suggestion at or above this confidence?');">
+            <input type="hidden" name="Show" value="@Model.Show" />
+            <label class="small text-muted">Confirm all suggestions ≥</label>
+            <input name="minConfidence" type="number" value="95" min="50" max="100" class="form-control form-control-sm" style="width:70px" />
+            <span class="small">%</span>
+            <button class="btn btn-sm btn-outline-success"><i class="fa-solid fa-check-double"></i></button>
+        </form>
+        <form method="post" asp-page-handler="Import" enctype="multipart/form-data" class="d-flex gap-1 align-items-center">
+            <input type="hidden" name="Show" value="@Model.Show" />
+            <input type="file" name="file" accept=".xlsx" class="form-control form-control-sm" style="max-width:220px" />
+            <button class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-file-import me-1"></i>Import</button>
+        </form>
+    </div>
+
+    <datalist id="hrmsList">
+        @foreach (var e in Model.HrmsEmployees)
+        {
+            <option value="@e.HE_EMP_CODE">@e.HE_EMP_NAME@(string.IsNullOrEmpty(e.HE_EMPLOYMENT_NO) ? "" : $" · {e.HE_EMPLOYMENT_NO}")@(e.HE_ACTIVE is "N" or "0" ? " (inactive)" : "")</option>
+        }
+    </datalist>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead><tr><th>TM Code</th><th>TM Name</th><th class="text-num">Lines</th><th style="min-width:260px">HRMS Employee</th><th>Match</th><th>Status</th><th style="width:150px"></th></tr></thead>
+            <tbody>
+                @if (!Model.Visible.Any()) { <tr><td colspan="7" class="grid-empty">Nothing to show.</td></tr> }
+                @foreach (var r in Model.Visible)
+                {
+                    var confirmed = r.ECM_STATUS == MapStatus.Confirmed && r.ECM_HRMS_EMP_CODE is not null;
+                    <tr>
+                        <td class="fw-semibold">@r.TM_EMP_CODE</td>
+                        <td>@r.TM_EMP_NAME</td>
+                        <td class="text-num">@(r.BOOKED_LINES > 0 ? r.BOOKED_LINES : "")</td>
+                        <td>
+                            <form method="post" asp-page-handler="SaveMap" id="f_@r.TM_EMP_CODE" class="d-flex gap-1">
+                                <input type="hidden" name="Show" value="@Model.Show" />
+                                <input type="hidden" name="tmCode" value="@r.TM_EMP_CODE" />
+                                <input type="hidden" name="originalHrms" value="@r.ECM_HRMS_EMP_CODE" />
+                                <input name="hrmsCode" value="@r.ECM_HRMS_EMP_CODE" list="hrmsList" class="form-control form-control-sm" placeholder="HRMS code" style="max-width:120px" />
+                            </form>
+                            <div class="small text-muted">@r.HRMS_EMP_NAME@(string.IsNullOrEmpty(r.HRMS_EMPLOYMENT_NO) ? "" : $" · {r.HRMS_EMPLOYMENT_NO}")</div>
+                        </td>
+                        <td class="small">@r.ECM_MATCH_TYPE@(r.ECM_CONFIDENCE is > 0 ? $" · {r.ECM_CONFIDENCE:0}%" : "")</td>
+                        <td>
+                            @if (confirmed) { <span class="badge-soft badge-normal">Confirmed</span> }
+                            else if (r.ECM_STATUS == MapStatus.Rejected) { <span class="badge-soft" style="background:#eee;color:#666">Not in HRMS</span> }
+                            else if (r.ECM_HRMS_EMP_CODE is not null) { <span class="badge-soft badge-mixed">Review</span> }
+                            else { <span class="badge-soft badge-ot">Unmapped</span> }
+                        </td>
+                        <td class="text-nowrap">
+                            <button form="f_@r.TM_EMP_CODE" name="decision" value="confirm" class="btn btn-sm btn-outline-success" title="Confirm / save this HRMS code"><i class="fa-solid fa-check"></i></button>
+                            <button form="f_@r.TM_EMP_CODE" name="decision" value="reject" class="btn btn-sm btn-outline-secondary" title="Not in HRMS / wrong suggestion"><i class="fa-solid fa-ban"></i></button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="small text-muted mb-0">Auto-match order: same code (zero padding ignored) or HRMS employment no. = TM code → <strong>confirmed automatically</strong>;
+        same name → 95 %; similar name → its similarity score (≥ 80 %, shown for review). An HRMS employee can belong to one technician only.</p>
+</div>

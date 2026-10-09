@@ -11,7 +11,10 @@
         <h1 class="page-title"><span class="ico"><i class="fa-solid fa-clock"></i></span> Time Sheets</h1>
         <p class="page-sub">@(Model.ScopedToMe ? "Your recent time bookings." : "All recent time bookings across technicians.")</p>
     </div>
-    <a asp-page="/TimeBooking/Entry" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>New Time Booking</a>
+    <div class="d-flex gap-2 flex-wrap">
+        <a asp-page="/FieldService/Entry" class="btn btn-outline-primary"><i class="fa-solid fa-truck-pickup me-2"></i>New Field Service Report</a>
+        <a asp-page="/TimeBooking/Entry" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i>New Time Booking</a>
+    </div>
 </div>
 
 @if (Model.IsOffline)
@@ -54,7 +57,7 @@
                     <th>Status</th>
                     <th class="text-num">Net Hrs</th>
                     <th class="text-num">Labour Cost</th>
-                    <th style="width:80px"></th>
+                    <th style="width:100px"></th>
                 </tr>
             </thead>
             <tbody>
@@ -71,13 +74,24 @@
                             <td>@s.TS_POSTING_DATE.ToString("dd-MMM-yyyy")</td>
                             <td>@s.TS_JOB_CODE</td>
                             <td>@s.TS_CUSTOMER_NAME</td>
-                            <td>@s.TS_LOCATION</td>
+                            <td>@s.TS_LOCATION@if (s.TS_SHEET_TYPE == YesTm.Web.Features.TimeBooking.SheetTypes.Field)
+                                { <span class="badge-soft badge-status ms-1" title="Field Service Report">FSR</span> }</td>
                             <td><span class="badge-soft badge-status">@s.TS_JOB_STATUS</span></td>
                             <td class="text-num">@s.TS_TOTAL_NET_HOURS.ToString("N2")</td>
                             <td class="text-num">@s.TS_TOTAL_LABOUR_COST.ToString("N2")</td>
                             <td class="text-end">
-                                <a asp-page="/TimeBooking/Entry" asp-route-tsId="@s.TS_ID"
-                                   class="btn btn-sm btn-outline-primary" title="Edit time sheet"><i class="fa-solid fa-pen"></i></a>
+                                @if (s.TS_SHEET_TYPE == YesTm.Web.Features.TimeBooking.SheetTypes.Field)
+                                {
+                                    <a asp-page="/FieldService/Print" asp-route-tsId="@s.TS_ID" target="_blank"
+                                       class="btn btn-sm btn-outline-secondary" title="Print Field Service Report"><i class="fa-solid fa-print"></i></a>
+                                    <a asp-page="/FieldService/Entry" asp-route-tsId="@s.TS_ID"
+                                       class="btn btn-sm btn-outline-primary" title="Edit Field Service Report"><i class="fa-solid fa-pen"></i></a>
+                                }
+                                else
+                                {
+                                    <a asp-page="/TimeBooking/Entry" asp-route-tsId="@s.TS_ID"
+                                       class="btn btn-sm btn-outline-primary" title="Edit time sheet"><i class="fa-solid fa-pen"></i></a>
+                                }
                             </td>
                         </tr>
                     }

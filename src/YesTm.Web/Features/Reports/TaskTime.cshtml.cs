@@ -7,11 +7,13 @@ namespace YesTm.Web.Features.Reports;
 public class TaskTimeModel : PageModel
 {
     private readonly IReportRepository _repo;
+    private readonly IUtilisationService _utilisation;
     private readonly ILogger<TaskTimeModel> _logger;
 
-    public TaskTimeModel(IReportRepository repo, ILogger<TaskTimeModel> logger)
+    public TaskTimeModel(IReportRepository repo, IUtilisationService utilisation, ILogger<TaskTimeModel> logger)
     {
         _repo = repo;
+        _utilisation = utilisation;
         _logger = logger;
     }
 
@@ -75,7 +77,7 @@ public class TaskTimeModel : PageModel
         var parts = new List<string>();
         var f = FilterField == ReportFilterField.All ? "All fields" : FilterField.ToString();
         if (!string.IsNullOrWhiteSpace(Search)) parts.Add($"{f}: \"{Search}\"");
-        if (DateFrom is { } df) parts.Add($"from {df:dd-MMM-yyyy}");
+        if (DateFrom is { } df) parts.Add($"work date from {df:dd-MMM-yyyy}");
         if (DateTo is { } dt) parts.Add($"to {dt:dd-MMM-yyyy}");
         if (parts.Count == 0) parts.Add("All task lines");
         return string.Join(" · ", parts);
@@ -94,8 +96,20 @@ public class TaskTimeModel : PageModel
     {
         var (uid, emp) = Scope();
         var result = await _repo.GetTaskTimeAsync(BuildFilter(paged: false), uid, emp, paged: false, ct);
-        var bytes = TaskTimeExcel.BuildTechnicianWise(result.Rows, FilterSummary());
+        // Availability needs every technician's rows for the period, so it ignores a text search on job/customer.
+        var util = await _utilisation.BuildAsync(result.Rows, DateFrom, DateTo,
+            includeAllMapped: IsAdmin && string.IsNullOrWhiteSpace(Search), ct);
+        var bytes = TaskTimeExcel.BuildTechnicianWise(result.Rows, FilterSummary(), util);
         return File(bytes, XlsxMime, $"TechnicianTaskReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx");
+    }
+
+    /// <summary>Job-wise workbook: a Summary tab (one row per job) plus one tab per job (lines grouped by technician).</summary>
+    public async Task<IActionResult> OnGetExportJobAsync(CancellationToken ct)
+    {
+        var (uid, emp) = Scope();
+        var result = await _repo.GetTaskTimeAsync(BuildFilter(paged: false), uid, emp, paged: false, ct);
+        var bytes = TaskTimeExcel.BuildJobWise(result.Rows, FilterSummary());
+        return File(bytes, XlsxMime, $"JobwiseTaskReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx");
     }
 
     private const string XlsxMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

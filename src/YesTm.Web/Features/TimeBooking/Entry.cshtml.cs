@@ -134,6 +134,10 @@ public class EntryModel : PageModel
                 return RedirectToPage("/TimeBooking/Index");
             }
 
+            // Field jobs are booked on the Field Service Report screen.
+            if (dto.TS_SHEET_TYPE == SheetTypes.Field)
+                return RedirectToPage("/FieldService/Entry", new { tsId = dto.TS_ID });
+
             TsId = dto.TS_ID;
             SheetNo = dto.TS_SHEET_NO;
             Header = new HeaderInput
@@ -209,6 +213,10 @@ public class EntryModel : PageModel
 
         if (Lines.Count == 0)
             ModelState.AddModelError(string.Empty, "Add at least one task line before posting.");
+
+        if (SheetTypes.IsFieldLocation(Header.Location))
+            ModelState.AddModelError(string.Empty,
+                "Field jobs are booked on the Field Service Report screen (Time Booking → New Field Service Report).");
 
         for (var i = 0; i < Lines.Count; i++)
         {
@@ -511,7 +519,8 @@ public class EntryModel : PageModel
                 TL_TRAVEL_START = travelStart,
                 TL_TRAVEL_END = travelEnd,
                 TL_TRAVEL_HOURS = travelHours,
-                TL_OVERRIDE_YN = overridden ? "Y" : "N"
+                TL_OVERRIDE_YN = overridden ? "Y" : "N",
+                TL_SEGMENT_TYPE = SegmentTypes.Work
             });
         }
 
@@ -546,6 +555,7 @@ public class EntryModel : PageModel
             TS_TOTAL_TRAVEL_HOURS = totalTravel,
             TS_TOTAL_COST = R2(totalCost + totalFood),
             TS_REMARKS = Header.Remarks,
+            TS_SHEET_TYPE = SheetTypes.Standard,
             TS_CREATION_USER_ID = CurrentUserId()
         };
 
@@ -565,7 +575,7 @@ public class EntryModel : PageModel
     };
 
     /// <summary>date + "HH:mm" (also accepts "H:mm" and "HH:mm:ss") → DateTime.</summary>
-    private static bool TryCombine(DateTime date, string? time, out DateTime result)
+    internal static bool TryCombine(DateTime date, string? time, out DateTime result)
     {
         result = default;
         if (string.IsNullOrWhiteSpace(time)) return false;

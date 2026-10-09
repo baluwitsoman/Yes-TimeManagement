@@ -62,7 +62,7 @@
                         <td>@x.TS_SHEET_NO</td>
                         <td>@x.TL_JOB_CODE</td>
                         <td>@x.TS_CUSTOMER_NAME</td>
-                        <td>@x.TL_TASK_NAME</td>
+                        <td>@x.TL_TASK_NAME@(x.TL_IDLE_HOURS > 0 ? $" (idle {x.TL_IDLE_HOURS:N2} h)" : "")</td>
                         <td>@x.TL_TECH_CODE @(string.IsNullOrEmpty(x.TL_TECH_NAME) ? "" : "· " + x.TL_TECH_NAME)</td>
                         <td>@x.TL_SKILL</td>
                         <td>@x.TL_LOCATION</td>

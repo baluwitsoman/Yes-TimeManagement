@@ -1,0 +1,185 @@
+@page
+@model YesTm.Web.Features.Reports.UtilisationModel
+@{
+    ViewData["Title"] = "Utilisation & Efficiency";
+    var r = Model.Report;
+    string P(decimal? v) => v is { } x ? x.ToString("0.0") + "%" : "—";
+    string D(decimal d) => d == Math.Floor(d) ? d.ToString("0") : d.ToString("0.#");
+    var rows = Model.Rows.ToList();
+    decimal Sum(Func<YesTm.Web.Features.Reports.TechUtilisation, decimal> f) => rows.Sum(f);
+    var avail = Sum(t => t.Kpi.Avail.AvailableHours);
+    var work = Sum(t => t.Kpi.WorkHours);
+    var std = Sum(t => t.Kpi.StdEarned);
+    var normal = Sum(t => t.Kpi.BookedNormal);
+    var paid = Sum(t => t.Kpi.PaidHours);
+    decimal? Pct(decimal n, decimal d) => d > 0 ? Math.Round(n / d * 100m, 1) : null;
+}
+
+@section Styles {
+    <style>
+        .chain { font-size: .78rem; color: var(--bs-secondary-color, #6c757d); }
+        .chain b { color: var(--bs-body-color, #212529); font-weight: 600; }
+        .kpi-pct { font-weight: 600; }
+        .unmapped { color: #8a6100; }
+        .defs dt { font-weight: 600; }
+        .defs dd { margin-bottom: .35rem; color: var(--bs-secondary-color, #555); }
+    </style>
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-chart-line"></i></span> Utilisation &amp; Efficiency</h1>
+        <p class="page-sub">How much of each technician's available time went into productive job work, and how fast against standard. Every figure shows how it is made.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="submit" form="utilFilter" name="handler" value="Export" class="btn btn-outline-success"><i class="fa-solid fa-file-excel me-2"></i>Export Excel</button>
+        <button type="button" class="btn btn-outline-danger" onclick="window.print()"><i class="fa-solid fa-print me-2"></i>Print</button>
+    </div>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Report unavailable — database not reachable.</div>
+}
+
+<div class="content-card">
+    <form method="get" id="utilFilter" class="row g-2 align-items-end mb-3">
+        <div class="col-md-3"><label class="form-label">Work Date From</label><input name="DateFrom" type="date" value="@Model.DateFrom?.ToString("yyyy-MM-dd")" class="form-control" /></div>
+        <div class="col-md-3"><label class="form-label">Work Date To</label><input name="DateTo" type="date" value="@Model.DateTo?.ToString("yyyy-MM-dd")" class="form-control" /></div>
+        <div class="col-md-4"><label class="form-label">Technician</label><input name="Technician" value="@Model.Technician" class="form-control" placeholder="code or name" /></div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-outline-primary flex-fill"><i class="fa-solid fa-magnifying-glass me-1"></i>Apply</button>
+            <a asp-page="/Reports/Utilisation" class="btn btn-outline-secondary" title="This month"><i class="fa-solid fa-xmark"></i></a>
+        </div>
+    </form>
+
+    @if (r is not null)
+    {
+        <div class="alert alert-light border small mb-3">
+            <i class="fa-regular fa-calendar me-1"></i><strong>Period</strong> @r.PeriodText ·
+            <strong>Standard day</strong> @r.StdHoursPerDay.ToString("0.00") h (Duty Timing) ·
+            <strong>Weekend</strong> @r.WeekendText ·
+            <strong>Source</strong> HRMS attendance for mapped technicians, calendar for the rest
+            (<a asp-page="/Hrms/Sync">mapping</a>).
+        </div>
+
+        <div class="kpi-grid mb-3">
+            <div class="kpi-card"><div class="kpi-icon bg-grad-blue"><i class="fa-solid fa-user-clock"></i></div><div class="kpi-val">@avail.ToString("N0")</div><div class="kpi-lbl">Available Hrs</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-green"><i class="fa-solid fa-screwdriver-wrench"></i></div><div class="kpi-val">@work.ToString("N0")</div><div class="kpi-lbl">Productive Work Hrs</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-amber"><i class="fa-solid fa-gauge"></i></div><div class="kpi-val">@P(Pct(work, paid))</div><div class="kpi-lbl">Utilisation (Work ÷ Paid)</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-purple"><i class="fa-solid fa-stopwatch"></i></div><div class="kpi-val">@P(Pct(std, work))</div><div class="kpi-lbl">Efficiency (Std ÷ Work)</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-blue"><i class="fa-solid fa-chart-pie"></i></div><div class="kpi-val">@P(Pct(std, paid))</div><div class="kpi-lbl">Productivity (Std ÷ Paid)</div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-grad-green"><i class="fa-solid fa-list-check"></i></div><div class="kpi-val">@P(Pct(normal, avail))</div><div class="kpi-lbl">Coverage (Booked Normal ÷ Available)</div></div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle tm-lines">
+                <thead>
+                    <tr>
+                        <th>Technician</th>
+                        <th class="text-num" title="Calendar − Weekend/Off − Holidays">Sched. Days</th>
+                        <th class="text-num">Leave</th>
+                        <th class="text-num">Absent</th>
+                        <th class="text-num" title="Scheduled − Leave − Absent">Avail. Days</th>
+                        <th class="text-num" title="Available days × Std hrs/day">Avail. Hrs</th>
+                        <th class="text-num">Booked Normal</th>
+                        <th class="text-num">OT</th>
+                        <th class="text-num" title="Available + OT">Paid Hrs</th>
+                        <th class="text-num" title="Available − Booked normal">Unbooked</th>
+                        <th class="text-num">Work</th>
+                        <th class="text-num">Travel</th>
+                        <th class="text-num">Idle</th>
+                        <th class="text-num" title="Earned standard hours">Std</th>
+                        <th class="text-num">Utilisation</th>
+                        <th class="text-num">Efficiency</th>
+                        <th class="text-num">Productivity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (rows.Count == 0) { <tr><td colspan="17" class="grid-empty">No technicians in this period.</td></tr> }
+                    @foreach (var t in rows)
+                    {
+                        var a = t.Kpi.Avail;
+                        <tr>
+                            <td>
+                                <strong>@t.TechCode</strong> @t.TechName
+                                @if (!t.Mapped) { <span class="badge-soft badge-mixed ms-1 unmapped" title="Not mapped to HRMS: holidays, leave and absence unknown">no HRMS</span> }
+                            </td>
+                            <td class="text-num">@D(a.ScheduledDays)</td>
+                            <td class="text-num" title="@a.LeaveText">@(a.LeaveDays > 0 ? D(a.LeaveDays) : "")</td>
+                            <td class="text-num">@(a.AbsentDays > 0 ? D(a.AbsentDays) : "")</td>
+                            <td class="text-num fw-semibold">@D(a.AvailableDays)</td>
+                            <td class="text-num fw-semibold">@a.AvailableHours.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.BookedNormal.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.BookedOt.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.PaidHours.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.UnbookedHours.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.WorkHours.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.TravelHours.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.IdleHours.ToString("N2")</td>
+                            <td class="text-num">@t.Kpi.StdEarned.ToString("N2")</td>
+                            <td class="text-num kpi-pct">@P(t.Kpi.UtilisationPct)</td>
+                            <td class="text-num kpi-pct">@P(t.Kpi.EfficiencyPct)</td>
+                            <td class="text-num kpi-pct">@P(t.Kpi.ProductivityPct)</td>
+                        </tr>
+                        <tr class="chain">
+                            <td colspan="17" class="pt-0 border-top-0">
+                                <i class="fa-solid fa-calculator me-1"></i>
+                                <b>@D(a.CalendarDays)</b> calendar − <b>@D(a.OffDays)</b> weekend/off − <b>@D(a.HolidayDays)</b> holiday = <b>@D(a.ScheduledDays)</b> scheduled
+                                − <b>@D(a.LeaveDays)</b> leave − <b>@D(a.AbsentDays)</b> absent = <b>@D(a.AvailableDays)</b> available × <b>@a.StdHoursPerDay.ToString("0.00")</b> h = <b>@a.AvailableHours.ToString("N2")</b> h
+                                + <b>@t.Kpi.BookedOt.ToString("N2")</b> OT = <b>@t.Kpi.PaidHours.ToString("N2")</b> h paid
+                                · Utilisation <b>@t.Kpi.WorkHours.ToString("N2")</b> ÷ <b>@t.Kpi.PaidHours.ToString("N2")</b>
+                                · Efficiency <b>@t.Kpi.StdEarned.ToString("N2")</b> ÷ <b>@t.Kpi.WorkHours.ToString("N2")</b>
+                                @if (a.HrmsDays > 0) { <text>· Clocked <b>@a.AttendanceHours.ToString("N2")</b> h vs booked <b>@t.Kpi.BookedNet.ToString("N2")</b> h</text> }
+                                @if (!string.IsNullOrEmpty(a.LeaveText)) { <text>· Leave: @a.LeaveText</text> }
+                                @if (a.Holidays.Count > 0) { <text>· Holidays: @string.Join(", ", a.Holidays)</text> }
+                                · <em>@a.Source</em>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                @if (rows.Count > 0)
+                {
+                    <tfoot>
+                        <tr class="fw-semibold">
+                            <td class="text-end">Total (@rows.Count)</td>
+                            <td class="text-num">@D(Sum(t => t.Kpi.Avail.ScheduledDays))</td>
+                            <td class="text-num">@D(Sum(t => t.Kpi.Avail.LeaveDays))</td>
+                            <td class="text-num">@D(Sum(t => t.Kpi.Avail.AbsentDays))</td>
+                            <td class="text-num">@D(Sum(t => t.Kpi.Avail.AvailableDays))</td>
+                            <td class="text-num">@avail.ToString("N2")</td>
+                            <td class="text-num">@normal.ToString("N2")</td>
+                            <td class="text-num">@Sum(t => t.Kpi.BookedOt).ToString("N2")</td>
+                            <td class="text-num">@paid.ToString("N2")</td>
+                            <td class="text-num">@Sum(t => t.Kpi.UnbookedHours).ToString("N2")</td>
+                            <td class="text-num">@work.ToString("N2")</td>
+                            <td class="text-num">@Sum(t => t.Kpi.TravelHours).ToString("N2")</td>
+                            <td class="text-num">@Sum(t => t.Kpi.IdleHours).ToString("N2")</td>
+                            <td class="text-num">@std.ToString("N2")</td>
+                            <td class="text-num">@P(Pct(work, paid))</td>
+                            <td class="text-num">@P(Pct(std, work))</td>
+                            <td class="text-num">@P(Pct(std, paid))</td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+
+        <details class="mt-3">
+            <summary class="fw-semibold">How these figures are calculated</summary>
+            <dl class="defs row mt-2 small">
+                <dt class="col-md-3">Scheduled days</dt><dd class="col-md-9">Calendar days − weekend/rostered off − public holidays (HRMS; half holidays = 0.5).</dd>
+                <dt class="col-md-3">Available days / hours</dt><dd class="col-md-9">Scheduled − approved leave − absent; × the standard day (@r.StdHoursPerDay.ToString("0.00") h).</dd>
+                <dt class="col-md-3">Booked normal / OT</dt><dd class="col-md-9">Hours on job time sheets in the period, split by the duty window (weekends &amp; holidays are all OT).</dd>
+                <dt class="col-md-3">Unbooked</dt><dd class="col-md-9">Available − booked normal: paid time no job carries (training, waiting, not entered…).</dd>
+                <dt class="col-md-3">Work / Travel / Idle</dt><dd class="col-md-9">Work = net hours on work lines minus idle; travel = travel segments + travel on lines; idle = waiting inside a segment.</dd>
+                <dt class="col-md-3">Std (earned)</dt><dd class="col-md-9">Standard hours of the tasks done; each job + task standard counts once and is shared among its technicians by their work hours.</dd>
+                <dt class="col-md-3">Paid hours</dt><dd class="col-md-9">Available + overtime booked — the time actually on the clock.</dd>
+                <dt class="col-md-3">Utilisation</dt><dd class="col-md-9">Work ÷ Paid — share of paid time on productive job work.</dd>
+                <dt class="col-md-3">Efficiency</dt><dd class="col-md-9">Std ÷ Work — over 100 % means faster than standard.</dd>
+                <dt class="col-md-3">Productivity</dt><dd class="col-md-9">Std ÷ Paid (= Utilisation × Efficiency).</dd>
+                <dt class="col-md-3">Coverage</dt><dd class="col-md-9">Booked normal ÷ Available — how much of the paid day is accounted for on jobs.</dd>
+            </dl>
+        </details>
+    }
+</div>

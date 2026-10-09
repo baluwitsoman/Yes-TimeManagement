@@ -24,6 +24,12 @@
             setVal("serialNo", o.getAttribute("data-serial"));
             setVal("openingDate", o.getAttribute("data-opening"));
             var loc = o.getAttribute("data-location");
+            // Field jobs are booked on the Field Service Report screen (new sheets only).
+            if (!isEdit && jobSelect.value && loc && loc.toLowerCase() === "field" && urls.fieldEntry) {
+                window.location.href = urls.fieldEntry + (urls.fieldEntry.indexOf("?") === -1 ? "?" : "&")
+                    + "jobCode=" + encodeURIComponent(jobSelect.value);
+                return;
+            }
             if (loc) setVal("location", loc);
             updateSelectedJobCode();
             checkExistingSheet(jobSelect.value);
