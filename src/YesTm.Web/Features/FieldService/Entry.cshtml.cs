@@ -267,6 +267,32 @@ public class EntryModel : PageModel
             }
         }
 
+        // A technician may have several bookings on one day, but never two at the same time (any sheet).
+        if (ModelState.IsValid)
+        {
+            var posted = new List<BookedRange>();
+            for (var i = 0; i < Lines.Count; i++)
+            {
+                var l = Lines[i];
+                if (string.IsNullOrWhiteSpace(l.TechCode)
+                    || !TimeBooking.EntryModel.TryCombine(l.WorkDate, l.StartTime, out var s)
+                    || !TimeBooking.EntryModel.TryCombine(l.WorkDate, l.EndTime, out var e)) continue;
+                if (e <= s) e = e.AddDays(1);
+                posted.Add(new BookedRange(l.TechCode, l.TechName, s, e, $"line {i + 1}, {(l.SegmentType == SegmentTypes.Travel ? "Travel" : l.TaskName)}"));
+            }
+            if (posted.Count > 0)
+            {
+                try
+                {
+                    var existing = await _repo.GetBookedRangesAsync(posted.Select(p => p.TechCode).Distinct().ToList(),
+                        posted.Min(p => p.Start), posted.Max(p => p.End), TsId, ct);
+                    foreach (var msg in BookingOverlap.Find(posted, existing).Take(10))
+                        ModelState.AddModelError(string.Empty, "Double booking — " + msg);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Double-booking check failed"); }
+            }
+        }
+
         if (!ModelState.IsValid)
         {
             await EnsureJobListedAsync(ct);

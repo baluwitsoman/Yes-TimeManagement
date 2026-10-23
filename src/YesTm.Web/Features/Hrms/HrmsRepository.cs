@@ -106,7 +106,7 @@ public sealed class HrmsRepository : IHrmsRepository
     {
         using var conn = await _db.CreateOpenConnectionAsync(ct);
         var rows = await conn.QueryAsync<(string PEMP_EMP_CODE, string? PEMP_EMP_NAME)>(new CommandDefinition(@"
-            SELECT PEMP_EMP_CODE, PEMP_EMP_NAME FROM PPM_EMPLOYEE_DETAILS WHERE PEMP_EMP_CODE IS NOT NULL", cancellationToken: ct));
+            SELECT PEMP_EMP_CODE, PEMP_EMP_NAME FROM " + EmployeeSql.Distinct, cancellationToken: ct));
         return rows.Select(r => (r.PEMP_EMP_CODE, r.PEMP_EMP_NAME)).ToList();
     }
 
@@ -134,7 +134,7 @@ public sealed class HrmsRepository : IHrmsRepository
                    NVL(b.n, 0) AS BOOKED_LINES,
                    m.ECM_HRMS_EMP_CODE, h.HE_EMP_NAME AS HRMS_EMP_NAME, h.HE_EMPLOYMENT_NO AS HRMS_EMPLOYMENT_NO,
                    m.ECM_MATCH_TYPE, m.ECM_CONFIDENCE, m.ECM_STATUS
-            FROM   PPM_EMPLOYEE_DETAILS e
+            FROM   " + EmployeeSql.Distinct + @" e
             LEFT JOIN (SELECT TL_TECH_CODE, COUNT(*) n FROM TM_TIME_LINE GROUP BY TL_TECH_CODE) b ON b.TL_TECH_CODE = e.PEMP_EMP_CODE
             LEFT JOIN TM_EMP_CODE_MAP m ON m.ECM_TM_EMP_CODE = e.PEMP_EMP_CODE
             LEFT JOIN TM_HRMS_EMPLOYEE h ON h.HE_EMP_CODE = m.ECM_HRMS_EMP_CODE

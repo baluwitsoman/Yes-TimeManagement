@@ -9,8 +9,11 @@
 <div class="page-head">
     <div>
         <h1 class="page-title"><span class="ico"><i class="fa-solid fa-arrows-rotate"></i></span> HRMS Sync &amp; Employee Mapping</h1>
-        <p class="page-sub">Holidays, weekends, leave, absence and punched hours come from HRMS attendance (company 39) — nobody books them as time.
-            Each TM technician must be <strong>mapped</strong> to his HRMS employee code for the reports to use them.</p>
+        <p class="page-sub">Links each TM technician to his HRMS employee code (company 39).
+            @(Model.Options.SyncAttendance
+                ? "Attendance (holidays, off days, leave) is also pulled from HRMS."
+                : "Attendance sync is off — holidays, leave, off days and idle time are booked on the Time Booking screen as non-job activities.")
+            Duplicate copies of the same employee are hidden (the original code is kept).</p>
     </div>
     <a asp-page-handler="Export" class="btn btn-outline-success"><i class="fa-solid fa-file-excel me-2"></i>Export Mapping</a>
 </div>

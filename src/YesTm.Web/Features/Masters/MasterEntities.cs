@@ -97,3 +97,43 @@ public sealed class TM_TASK_STD
     // joined for display
     public string? TASK_NAME { get; set; }
 }
+
+/// <summary>
+/// New table TM_NONJOB_ACTIVITY (db/11) — holiday, leave, week-off, idle, training … booked on the Time
+/// Booking screen like a job (NJ_CODE is what goes into TS_JOB_CODE / TL_JOB_CODE).
+/// </summary>
+public sealed class TM_NONJOB_ACTIVITY
+{
+    public string NJ_CODE { get; set; } = string.Empty;
+    public string? NJ_NAME { get; set; }
+    public string NJ_CATEGORY { get; set; } = NonJobCategories.Leave;
+    public string NJ_PAID_YN { get; set; } = "Y";
+    public decimal? NJ_SORT { get; set; }
+    public string ACTIVE_YN { get; set; } = "Y";
+}
+
+/// <summary>What the hours of a non-job activity mean to the reports.</summary>
+public static class NonJobCategories
+{
+    public const string Holiday = "HOLIDAY";   // absence: public holiday
+    public const string Leave = "LEAVE";       // absence: leave
+    public const string Off = "OFF";           // absence: week off / rest day / comp off
+    public const string Idle = "IDLE";         // present, no work
+    public const string NonProd = "NONPROD";   // present, non-productive (training, housekeeping…)
+
+    public static readonly string[] All = [Holiday, Leave, Off, Idle, NonProd];
+
+    /// <summary>Absence categories reduce available hours instead of counting as booked time.</summary>
+    public static bool IsAbsence(string? c) => c is Holiday or Leave or Off;
+
+    public static string Label(string? c) => c switch
+    {
+        Holiday => "Holiday (absence)",
+        Leave => "Leave (absence)",
+        Off => "Week off / rest (absence)",
+        Idle => "Idle (present, no work)",
+        NonProd => "Non-productive (present)",
+        _ => c ?? ""
+    };
+}
+

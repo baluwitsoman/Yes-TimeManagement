@@ -94,9 +94,22 @@
                             @j.MTJ_JOB_CODE — @j.MTJ_JOB_DESC@(existingSheet is null ? "" : $"  ✓ {existingSheet}")
                         </option>
                     }
+                    @if (Model.NonJobs.Count > 0)
+                    {
+                        <optgroup label="Non-job time — holiday / leave / off / idle" id="nonJobGroup">
+                            @foreach (var a in Model.NonJobs)
+                            {
+                                <option value="@a.NJ_CODE" data-nonjob="1" data-name="@a.NJ_NAME" data-category="@a.NJ_CATEGORY" data-paid="@a.NJ_PAID_YN">
+                                    @a.NJ_CODE — @a.NJ_NAME
+                                </option>
+                            }
+                        </optgroup>
+                    }
                 </select>
                 <span asp-validation-for="Header.JobCode" class="text-danger small"></span>
-                <span class="text-muted small"><i class="fa-regular fa-circle-question me-1"></i>Jobs marked ✓ already have a time sheet — selecting one offers to open it. Field jobs open the Field Service Report.</span>
+                <span class="text-muted small"><i class="fa-regular fa-circle-question me-1"></i>Jobs marked ✓ already have a time sheet — selecting one offers to open it. Field jobs open the Field Service Report.
+                    Holiday, leave, week off and idle time are at the end of the list (<em>Non-job time</em>).</span>
+                <div id="nonJobNote" class="alert alert-info py-1 px-2 small mt-2 mb-0" style="display:none"></div>
             </div>
 
             <div class="col-md-6">
@@ -266,7 +279,7 @@
                 <div class="alert alert-danger py-2 d-none" id="modalError"></div>
 
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-6" id="m_task_wrap">
                         <label class="form-label">Task <span class="req">*</span></label>
                         <select id="m_task" class="form-select">
                             <option value="">— Select Task —</option>
@@ -282,7 +295,7 @@
                             <option value="">— Select Technician —</option>
                             @foreach (var tech in Model.Technicians)
                             {
-                                <option value="@tech.PEMP_EMP_CODE" data-name="@tech.PEMP_EMP_NAME">@tech.PEMP_EMP_CODE — @tech.PEMP_EMP_NAME</option>
+                                <option value="@tech.PEMP_EMP_CODE" data-name="@tech.PEMP_EMP_NAME" title="@tech.PEMP_EMP_CODE">@tech.PEMP_EMP_NAME</option>
                             }
                         </select>
                     </div>
@@ -302,8 +315,16 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Date <span class="req">*</span></label>
+                        <label class="form-label"><span id="m_date_label">Date</span> <span class="req">*</span></label>
                         <input id="m_date" class="form-control tm-pick" placeholder="Select date" />
+                    </div>
+                    <div class="col-md-3" id="m_dateto_wrap" style="display:none">
+                        <label class="form-label">To Date <span class="text-muted small">(multi-day)</span></label>
+                        <input id="m_date_to" type="date" class="form-control" />
+                        <div class="form-check mt-1">
+                            <input id="m_skip_weekend" type="checkbox" class="form-check-input" checked />
+                            <label for="m_skip_weekend" class="form-check-label small">Skip weekend days</label>
+                        </div>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Lunch Break (hh:mm)</label>
@@ -329,7 +350,7 @@
                 </div>
 
                 <div class="section-h mt-4">
-                    <i class="fa-solid fa-calculator"></i> Hours &amp; Cost
+                    <i class="fa-solid fa-calculator"></i> <span id="m_hours_title">Hours &amp; Cost</span>
                     <span class="text-muted small fw-normal ms-2">auto-calculated from duty timings &amp; labour rate — adjust any value if needed</span>
                     <span id="m_calcStatus" class="ms-auto small text-muted"></span>
                     <button type="button" id="m_recalc" class="btn btn-outline-secondary btn-sm ms-2" title="Discard adjustments and recalculate">
@@ -369,6 +390,7 @@
                     </div>
                 </div>
 
+                <div id="m_travel_wrap">
                 <div class="section-h mt-4"><i class="fa-solid fa-route"></i> Travel <span class="text-muted small fw-normal ms-2">optional</span></div>
                 <div class="row g-3">
                     <div class="col-md-5">
@@ -387,6 +409,7 @@
                         <label class="form-label">Total Travel Hrs <span class="tm-adj" data-for="travel"></span></label>
                         <input id="m_travel_hours" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="travel" />
                     </div>
+                </div>
                 </div>
             </div>
             <div class="modal-footer">

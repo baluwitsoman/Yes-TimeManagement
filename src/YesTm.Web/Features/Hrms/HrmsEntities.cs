@@ -11,8 +11,13 @@ public sealed class HrmsOptions
     public string? CompanyShortCode { get; set; }
     /// <summary>Shared secret, sent as X-Api-Key (HRMS config TmSync:ApiKey).</summary>
     public string? ApiKey { get; set; }
-    /// <summary>Run the nightly sync at this local hour (0-23); null/negative = no schedule.</summary>
-    public int? NightlySyncHour { get; set; } = 2;
+    /// <summary>Run the nightly sync at this local hour (0-23); null/negative = no schedule (default: off).</summary>
+    public int? NightlySyncHour { get; set; }
+    /// <summary>
+    /// Also pull daily attendance (holiday / week-off / leave) from HRMS. Off: leave, holidays and
+    /// off days are booked in TM as non-job activities instead, so only the employee list is synced.
+    /// </summary>
+    public bool SyncAttendance { get; set; }
     /// <summary>The nightly sync re-pulls this many past days (attendance gets corrected late).</summary>
     public int SyncDaysBack { get; set; } = 35;
     public int TimeoutSeconds { get; set; } = 120;

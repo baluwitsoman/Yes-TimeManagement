@@ -1,0 +1,119 @@
+@page
+@model YesTm.Web.Features.Masters.NonJobActivityModel
+@using YesTm.Web.Features.Masters
+@{
+    ViewData["Title"] = "Non-Job Activities";
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-umbrella-beach"></i></span> Non-Job Activities</h1>
+        <p class="page-sub">Holiday, leave, week off, idle, training … — they appear in the Time Booking <strong>Job</strong> list and are booked on the same screen.
+            The <strong>category</strong> tells the reports what the hours mean.</p>
+    </div>
+    <button class="btn btn-primary" data-master-add data-title="Add Non-Job Activity"><i class="fa-solid fa-plus me-2"></i>Add Activity</button>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Not available — run <code>db/11_nonjob_activities.sql</code>.</div>
+}
+
+<div class="content-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Paid</th><th class="text-num">Sort</th><th>Status</th><th style="width:160px"></th></tr></thead>
+            <tbody>
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="7" class="grid-empty">No non-job activities defined.</td></tr>
+                }
+                @foreach (var a in Model.Items)
+                {
+                    var active = a.ACTIVE_YN == "Y";
+                    <tr class="@(active ? "" : "text-muted")">
+                        <td class="fw-semibold">@a.NJ_CODE</td>
+                        <td>@a.NJ_NAME</td>
+                        <td><span class="badge-soft @(NonJobCategories.IsAbsence(a.NJ_CATEGORY) ? "badge-mixed" : "badge-status")">@NonJobCategories.Label(a.NJ_CATEGORY)</span></td>
+                        <td>@(a.NJ_PAID_YN == "Y" ? "Yes" : "No")</td>
+                        <td class="text-num">@a.NJ_SORT</td>
+                        <td>
+                            @if (active) { <span class="badge-soft badge-normal">Active</span> }
+                            else { <span class="badge-soft" style="background:#eee;color:#888">Inactive</span> }
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" data-row="@System.Text.Json.JsonSerializer.Serialize(a)"><i class="fa-solid fa-pen"></i></button>
+                            <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                <input type="hidden" name="code" value="@a.NJ_CODE" />
+                                <input type="hidden" name="active" value="@(active ? "N" : "Y")" />
+                                <button class="btn btn-sm @(active ? "btn-outline-danger" : "btn-outline-success")" title="@(active ? "Deactivate" : "Activate")">
+                                    <i class="fa-solid @(active ? "fa-ban" : "fa-check")"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <dl class="row small text-muted mb-0 mt-2">
+        <dt class="col-md-3">Holiday / Leave / Week off</dt><dd class="col-md-9">Absence — the hours reduce the technician's available hours (not counted as booked work). Always Normal hours, never OT.</dd>
+        <dt class="col-md-3">Idle</dt><dd class="col-md-9">Present but no work — counted as idle time.</dd>
+        <dt class="col-md-3">Non-productive</dt><dd class="col-md-9">Present, booked, but not job work (training, housekeeping…).</dd>
+        <dt class="col-md-3">Hours only</dt><dd class="col-md-9">Non-job lines carry hours, not job cost (rate / cost / food are 0). <em>Paid</em> is kept for information (e.g. unpaid leave) — it does not change the hours.</dd>
+    </dl>
+</div>
+
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" asp-page-handler="Save" id="masterForm" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterModalTitle">Add Non-Job Activity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="IsEdit" value="false" />
+                <div class="mb-3">
+                    <label class="form-label">Code <span class="req">*</span></label>
+                    <input name="Input.NJ_CODE" class="form-control" data-key-field required maxlength="15" placeholder="NJ-AL" />
+                    <div class="form-text">"NJ-" is added if missing.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Name <span class="req">*</span></label>
+                    <input name="Input.NJ_NAME" class="form-control" required maxlength="100" />
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Category <span class="req">*</span></label>
+                        <select name="Input.NJ_CATEGORY" class="form-select" data-default="LEAVE">
+                            @foreach (var c in NonJobCategories.All)
+                            {
+                                <option value="@c">@NonJobCategories.Label(c)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Paid</label>
+                        <select name="Input.NJ_PAID_YN" class="form-select" data-default="Y"><option value="Y">Yes</option><option value="N">No</option></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sort</label>
+                        <input name="Input.NJ_SORT" type="number" class="form-control" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Status</label>
+                        <select name="Input.ACTIVE_YN" class="form-select" data-default="Y"><option value="Y">Active</option><option value="N">Inactive</option></select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/masters.js" asp-append-version="true"></script>
+}

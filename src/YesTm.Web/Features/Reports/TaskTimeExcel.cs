@@ -22,7 +22,7 @@ public static class TaskTimeExcel
         new("Posting Date",  (c, x) => c.Value = x.TS_POSTING_DATE, Format: DateFmt),
         new("Job No",        (c, x) => c.Value = x.TL_JOB_CODE),
         new("Customer",      (c, x) => c.Value = x.TS_CUSTOMER_NAME),
-        new("Segment",       (c, x) => c.Value = x.TL_SEGMENT_TYPE == "TRAVEL" ? "Travel" : "Work"),
+        new("Segment",       (c, x) => c.Value = x.IsNonJob ? "Non-job: " + NonJobLabel(x.NJ_CATEGORY) : x.TL_SEGMENT_TYPE == "TRAVEL" ? "Travel" : "Work"),
         new("Task",          (c, x) => c.Value = x.TL_TASK_NAME),
         new("Tech Code",     (c, x) => c.Value = x.TL_TECH_CODE),
         new("Technician",    (c, x) => c.Value = x.TL_TECH_NAME),
@@ -46,12 +46,17 @@ public static class TaskTimeExcel
         new("Travel Start",  (c, x) => { if (x.TL_TRAVEL_START is { } d) c.Value = d; }, Format: TimeFmt),
         new("Travel End",    (c, x) => { if (x.TL_TRAVEL_END is { } d) c.Value = d; }, Format: TimeFmt),
         new("Travel Hrs",    (c, x) => c.Value = x.TL_TRAVEL_HOURS, true),
-        new("Idle Hrs",      (c, x) => c.Value = x.TL_IDLE_HOURS, true),
+        new("Idle Hrs",      (c, x) => c.Value = x.IdleHours, true),
         new("Idle Reason",   (c, x) => c.Value = x.TL_IDLE_REASON),
         new("Adjusted",      (c, x) => c.Value = x.TL_OVERRIDE_YN == "Y" ? "Yes" : ""),
         new("Work Type",     (c, x) => c.Value = x.WORK_TYPE_NAME),
         new("Job Status",    (c, x) => c.Value = x.TS_JOB_STATUS),
     ];
+
+    private static string NonJobLabel(string? c) => c switch
+    {
+        "HOLIDAY" => "Holiday", "LEAVE" => "Leave", "OFF" => "Week off", "IDLE" => "Idle", "NONPROD" => "Non-productive", _ => c ?? ""
+    };
 
     private static int ColIndex(string header) => Array.FindIndex(Columns, c => c.Header == header) + 1;
 
@@ -108,7 +113,7 @@ public static class TaskTimeExcel
         sum.Range(2, 1, 3, 1).Style.Font.FontColor = XLColor.DimGray;
 
         string[] sumHeaders = ["Tech Code", "Technician", "Jobs", "Task Lines", "Std Hrs", "Work Hrs", "Efficiency %",
-            "Travel Hrs", "Idle Hrs", "Net Hrs", "Normal Hrs", "OT Hrs", "Labour Cost", "Food Allowance", "Total Cost"];
+            "Travel Hrs", "Idle Hrs", "Absence Hrs", "Non-prod Hrs", "Net Hrs", "Normal Hrs", "OT Hrs", "Labour Cost", "Food Allowance", "Total Cost"];
         for (var c = 0; c < sumHeaders.Length; c++) sum.Cell(5, c + 1).Value = sumHeaders[c];
         StyleHeader(sum.Range(5, 1, 5, sumHeaders.Length));
 
@@ -199,7 +204,7 @@ public static class TaskTimeExcel
         sum.Range(2, 1, 3, 1).Style.Font.FontColor = XLColor.DimGray;
 
         string[] headers = ["Job No", "Customer", "Location", "Job Status", "Sheet No", "First Work Date", "Last Work Date",
-            "Technicians", "Task Lines", "Std Hrs", "Work Hrs", "Efficiency %", "Travel Hrs", "Idle Hrs",
+            "Technicians", "Task Lines", "Std Hrs", "Work Hrs", "Efficiency %", "Travel Hrs", "Idle Hrs", "Absence Hrs", "Non-prod Hrs",
             "Net Hrs", "Normal Hrs", "OT Hrs", "Labour Cost", "Food Allowance", "Total Cost"];
         for (var c = 0; c < headers.Length; c++) sum.Cell(5, c + 1).Value = headers[c];
         StyleHeader(sum.Range(5, 1, 5, headers.Length));
@@ -266,8 +271,11 @@ public static class TaskTimeExcel
         return Save(wb);
     }
 
-    /// <summary>Standard vs actual work hours (travel and idle are excluded from the efficiency base).</summary>
-    private sealed record JobKpi(decimal Std, decimal Work, decimal Travel, decimal Idle)
+    /// <summary>
+    /// Standard vs actual work hours (travel, idle and non-job time are excluded from the efficiency base),
+    /// plus the non-job buckets: absence (holiday/leave/off) and non-productive (training…).
+    /// </summary>
+    private sealed record JobKpi(decimal Std, decimal Work, decimal Travel, decimal Idle, decimal Absence, decimal NonProd)
     {
         public decimal? Efficiency => Work > 0 ? Math.Round(Std / Work * 100m, 1) : null;
     }
@@ -275,10 +283,8 @@ public static class TaskTimeExcel
     /// <summary>KPIs for a set of lines given the standard hours earned on them.</summary>
     private static JobKpi Kpi(IReadOnlyList<TaskTimeReportRow> rows, decimal std)
     {
-        var work = rows.Where(x => x.TL_SEGMENT_TYPE != "TRAVEL").Sum(x => x.TL_NET_HOURS - x.TL_IDLE_HOURS);
-        var travel = rows.Where(x => x.TL_SEGMENT_TYPE == "TRAVEL").Sum(x => x.TL_NET_HOURS)
-                   + rows.Where(x => x.TL_SEGMENT_TYPE != "TRAVEL").Sum(x => x.TL_TRAVEL_HOURS);
-        return new JobKpi(std, work, travel, rows.Sum(x => x.TL_IDLE_HOURS));
+        var m = ReportMetrics.Of(rows);
+        return new JobKpi(std, m.Work, m.Travel, m.Idle, m.Absence, m.NonProd);
     }
 
     private static JobKpi JobKpis(IReadOnlyList<TaskTimeReportRow> rows, IEnumerable<IReadOnlyList<TaskTimeReportRow>> jobs) =>
@@ -289,7 +295,7 @@ public static class TaskTimeExcel
     /// (summing TL_STD_HOURS per line would inflate it when a task spans days or technicians).
     /// </summary>
     private static IEnumerable<(decimal Std, List<TaskTimeReportRow> Lines)> StdGroups(IEnumerable<TaskTimeReportRow> rows) => rows
-        .Where(x => x.TL_SEGMENT_TYPE != "TRAVEL" && !string.IsNullOrWhiteSpace(x.TL_TASK_NAME))
+        .Where(x => x.IsJobWork && !string.IsNullOrWhiteSpace(x.TL_TASK_NAME))
         .GroupBy(x => (Job: x.TL_JOB_CODE ?? "", Task: x.TL_TASK_NAME!.ToUpperInvariant()))
         .Select(g => (g.Max(x => x.TL_STD_HOURS), g.ToList()));
 
@@ -318,12 +324,14 @@ public static class TaskTimeExcel
         if (k.Efficiency is { } e) ws.Cell(row, col + 2).Value = e;
         ws.Cell(row, col + 3).Value = k.Travel;
         ws.Cell(row, col + 4).Value = k.Idle;
-        ws.Cell(row, col + 5).Value = t.Net;
-        ws.Cell(row, col + 6).Value = t.Normal;
-        ws.Cell(row, col + 7).Value = t.Ot;
-        ws.Cell(row, col + 8).Value = t.Cost;
-        ws.Cell(row, col + 9).Value = t.Food;
-        ws.Cell(row, col + 10).Value = t.Total;
+        ws.Cell(row, col + 5).Value = k.Absence;
+        ws.Cell(row, col + 6).Value = k.NonProd;
+        ws.Cell(row, col + 7).Value = t.Net;
+        ws.Cell(row, col + 8).Value = t.Normal;
+        ws.Cell(row, col + 9).Value = t.Ot;
+        ws.Cell(row, col + 10).Value = t.Cost;
+        ws.Cell(row, col + 11).Value = t.Food;
+        ws.Cell(row, col + 12).Value = t.Total;
     }
 
     // =====================================================================================
@@ -364,7 +372,7 @@ public static class TaskTimeExcel
             var a = t.Kpi.Avail;
             ws.Cell(r, 1).Value = t.TechCode;
             ws.Cell(r, 2).Value = t.TechName;
-            ws.Cell(r, 3).Value = t.HrmsCode ?? "not mapped";
+            ws.Cell(r, 3).Value = t.HrmsCode ?? "";
             ws.Cell(r, 4).Value = a.Source;
             ws.Cell(r, 5).Value = a.CalendarDays;
             ws.Cell(r, 6).Value = a.OffDays;
@@ -392,7 +400,6 @@ public static class TaskTimeExcel
             }
             ws.Cell(r, 29).Value = a.LeaveText;
             ws.Cell(r, 30).Value = a.Formula;
-            if (!t.Mapped) ws.Range(r, 1, r, 4).Style.Font.FontColor = XLColor.FromHtml("#8A6100");
             r++;
         }
 
@@ -425,9 +432,9 @@ public static class TaskTimeExcel
         var n = r + 2;
         ws.Cell(n, 1).Value = "Notes";
         ws.Cell(n, 1).Style.Font.Bold = true;
-        ws.Cell(n + 1, 1).Value = "• Days come from HRMS attendance (V_ATT_TRAN, company 39) for technicians mapped under HRMS Sync; days without HRMS data use the duty-timing weekend only (no holidays/leave known).";
+        ws.Cell(n + 1, 1).Value = "• Holidays, leave and week-off come from non-job time booked on the Time Booking screen; other days use the Duty Timing weekend.";
         ws.Cell(n + 2, 1).Value = "• Std Hrs (earned): each job + task standard counted once and shared among its technicians by their work hours.";
-        ws.Cell(n + 3, 1).Value = "• Brown codes = technician not mapped to HRMS yet: holidays, leave and absence are unknown, so availability is overstated.";
+        ws.Cell(n + 3, 1).Value = "• If leave / holidays are not booked, available hours are overstated and utilisation looks low.";
     }
 
     private static void WritePctFormulas(IXLWorksheet ws, int r)
@@ -448,11 +455,11 @@ public static class TaskTimeExcel
         {
             { "Term", "Meaning", "Formula" },
             { "Calendar Days", "Every day in the report period.", "To − From + 1" },
-            { "Weekend / Off", "Rostered off days (HRMS 'OFF'), or the Duty Timing weekend days when there is no HRMS data.", "" },
-            { "Holidays", "Public holidays from HRMS (half holidays count 0.5).", "" },
+            { "Weekend / Off", "Duty Timing weekend days, plus week-off / comp-off days booked as non-job time.", "" },
+            { "Holidays", "Public holidays booked as non-job time (or from HRMS attendance when that sync is on).", "" },
             { "Scheduled Days", "Days the technician was expected to work.", "Calendar − Weekend/Off − Holidays" },
-            { "Leave Days", "Approved leave from HRMS attendance (half days count 0.5); Leave Detail lists the types.", "" },
-            { "Absent Days", "Scheduled days with no attendance and no leave (HRMS 'ABSENT').", "" },
+            { "Leave Days", "Leave booked as non-job time (Annual / Sick / … leave) — or HRMS attendance when that sync is on. Hours ÷ Std Hrs/Day, so a half day counts 0.5; Leave Detail lists the types.", "" },
+            { "Absent Days", "Only known from HRMS attendance (sync currently off) — otherwise 0.", "" },
             { "Available Days", "Days the technician was actually available for work.", "Scheduled − Leave − Absent" },
             { "Std Hrs / Day", $"One standard working day (Duty Timing master{(stdHoursPerDay is { } s ? $", currently {s:0.00} h" : "")}).", "" },
             { "Available Hrs", "Paid normal hours the technician could have booked.", "Available Days × Std Hrs/Day" },
@@ -461,9 +468,11 @@ public static class TaskTimeExcel
             { "Booked Normal Hrs", "Normal hours booked on job time sheets in the period.", "Σ Normal" },
             { "Paid Hrs", "Hours the technician was on the clock: available normal hours plus overtime worked.", "Available Hrs + Booked OT" },
             { "Unbooked Hrs", "Available normal hours that no job carries.", "MAX(0, Available Hrs − Booked Normal)" },
-            { "Work Hrs", "Productive hours on Work segments/lines.", "Σ (Net − Idle) on non-travel lines" },
+            { "Work Hrs", "Productive hours on real job lines (not travel, not non-job time).", "Σ (Net − Idle) on job work lines" },
             { "Travel Hrs", "Travel segments (field reports) plus travel time recorded on lines.", "" },
-            { "Idle Hrs", "Waiting time inside a segment (no parts, customer not ready, permit…). Paid, not productive.", "" },
+            { "Idle Hrs", "Waiting inside a job segment (no parts, customer not ready…) plus lines booked on the 'Idle' non-job activity. Paid, not productive.", "" },
+            { "Absence Hrs", "Hours booked on holiday / leave / week-off non-job activities. They lower available hours; they are not work.", "" },
+            { "Non-prod Hrs", "Hours booked on non-productive activities (training, housekeeping…): present and paid, not job work.", "" },
             { "Std Hrs (earned)", "Standard hours of the tasks done. Each job + task standard counts once and is shared among its technicians by their work hours.", "Σ task std × (tech work ÷ all work on that task)" },
             { "Coverage %", "How much of the available day is accounted for by job bookings.", "Booked Normal ÷ Available Hrs × 100" },
             { "Utilisation %", "Share of paid time spent on productive job work.", "Work Hrs ÷ Paid Hrs × 100" },

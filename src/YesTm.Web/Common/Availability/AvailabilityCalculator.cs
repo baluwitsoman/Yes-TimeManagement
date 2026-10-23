@@ -35,9 +35,11 @@ public sealed record Availability(
 
 public static class AvailabilitySources
 {
+    /// <summary>Holiday / leave / week-off booked as non-job time + Duty Timing weekend.</summary>
+    public const string Booked = "Booked non-job time + calendar";
     public const string Hrms = "HRMS attendance";
     public const string Partial = "HRMS + calendar";
-    public const string Calendar = "Calendar estimate (no HRMS data)";
+    public const string Calendar = "Calendar only (no absence booked)";
 }
 
 /// <summary>Pure availability arithmetic (unit-tested); days without HRMS attendance fall back to the duty-timing weekend.</summary>
@@ -47,7 +49,8 @@ public static class AvailabilityCalculator
         { "PRESENT", "LATE", "PERM", "SPECIAL", "MANUAL", "OTHER" };
 
     public static Availability Calculate(DateTime from, DateTime to, decimal stdHoursPerDay,
-        IReadOnlySet<DayOfWeek> weekend, IReadOnlyDictionary<DateTime, AttendanceDay>? attendance)
+        IReadOnlySet<DayOfWeek> weekend, IReadOnlyDictionary<DateTime, AttendanceDay>? attendance,
+        string source = AvailabilitySources.Hrms)
     {
         from = from.Date; to = to.Date;
         if (to < from) (from, to) = (to, from);
@@ -95,12 +98,14 @@ public static class AvailabilityCalculator
 
         var scheduled = cal - off - hol;
         var available = Math.Max(0m, scheduled - leave - absent);
-        var source = hrmsDays == 0 ? AvailabilitySources.Calendar
-                   : hrmsDays < cal ? AvailabilitySources.Partial
-                   : AvailabilitySources.Hrms;
+        // Booked absence is naturally partial (only absence days are booked), so it keeps its own label.
+        var label = hrmsDays == 0 ? AvailabilitySources.Calendar
+                  : source != AvailabilitySources.Hrms ? source
+                  : hrmsDays < cal ? AvailabilitySources.Partial
+                  : AvailabilitySources.Hrms;
 
         return new Availability(from, to, stdHoursPerDay, cal, off, hol, scheduled, leave, absent, available,
-            Math.Round(actual, 2), hrmsDays, source, leaveByType, holidays.ToList());
+            Math.Round(actual, 2), hrmsDays, label, leaveByType, holidays.ToList());
     }
 
     private static decimal Clamp(decimal v) => v is > 0m and <= 1m ? v : 1m;
@@ -116,7 +121,8 @@ public static class AvailabilityCalculator
 /// </summary>
 public sealed record UtilisationKpi(
     Availability Avail, decimal BookedNet, decimal BookedNormal, decimal BookedOt,
-    decimal WorkHours, decimal TravelHours, decimal IdleHours, decimal StdEarned)
+    decimal WorkHours, decimal TravelHours, decimal IdleHours, decimal StdEarned,
+    decimal NonProdHours = 0m, decimal AbsenceHours = 0m)
 {
     public decimal UnbookedHours => Math.Max(0m, Avail.AvailableHours - BookedNormal);
     public decimal PaidHours => Avail.AvailableHours + BookedOt;

@@ -58,6 +58,12 @@ public sealed class ReportRepository : IReportRepository
         var orderBy = SortColumn(f.SortBy) + (f.SortDesc ? " DESC" : " ASC")
                       + " NULLS LAST, s.TS_POSTING_DATE DESC, s.TS_SHEET_NO, l.TL_LINE_NO";
 
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        // Non-job activity category (holiday / leave / off / idle / non-productive) — db/11.
+        var hasNonJob = await SchemaInfo.HasColumnAsync(conn, "TM_NONJOB_ACTIVITY", "NJ_CATEGORY", ct);
+        var njSelect = hasNonJob ? "nj.NJ_CATEGORY, nj.NJ_NAME" : "CAST(NULL AS VARCHAR2(10)) AS NJ_CATEGORY, CAST(NULL AS VARCHAR2(100)) AS NJ_NAME";
+        var njJoin = hasNonJob ? "LEFT JOIN TM_NONJOB_ACTIVITY nj ON nj.NJ_CODE = l.TL_JOB_CODE" : "";
+
         var sql = $@"
             SELECT s.TS_SHEET_NO, s.TS_POSTING_DATE, l.TL_JOB_CODE, s.TS_CUSTOMER_NAME,
                    l.TL_TASK_NAME, l.TL_TECH_CODE, l.TL_TECH_NAME, l.TL_SKILL, l.TL_LOCATION,
@@ -75,6 +81,7 @@ public sealed class ReportRepository : IReportRepository
                    NVL(l.TL_OVERRIDE_YN,'N')  AS TL_OVERRIDE_YN,
                    NVL(l.TL_SEGMENT_TYPE,'WORK') AS TL_SEGMENT_TYPE,
                    NVL(l.TL_IDLE_HOURS,0)     AS TL_IDLE_HOURS, l.TL_IDLE_REASON,
+                   {njSelect},
                    COUNT(*) OVER()                    AS TOTAL_ROWS,
                    SUM(l.TL_NET_HOURS)   OVER()       AS GRAND_NET,
                    SUM(l.TL_LABOUR_COST) OVER()       AS GRAND_COST,
@@ -86,6 +93,7 @@ public sealed class ReportRepository : IReportRepository
             FROM   TM_TIME_LINE l
             JOIN   TM_TIME_SHEET s ON s.TS_ID = l.TL_TS_ID
             LEFT JOIN TM_WORK_TYPE w ON w.WORK_TYPE_CODE = s.TS_WORK_TYPE_CODE
+            {njJoin}
             WHERE  NVL(s.TS_ACTIVE_YN,'Y') = 'Y'
               AND  (:scopeUserId IS NULL
                     OR s.TS_CREATION_USER_ID = :scopeUserId
@@ -110,7 +118,6 @@ public sealed class ReportRepository : IReportRepository
             p.Add("pageSize", pageSize, DbType.Int32);
         }
 
-        using var conn = await _db.CreateOpenConnectionAsync(ct);
         var rows = (await conn.QueryAsync<TaskTimeReportRow>(new CommandDefinition(sql, p, cancellationToken: ct))).AsList();
         var total = rows.Count > 0 ? rows[0].TOTAL_ROWS : 0;
         var totals = rows.Count > 0

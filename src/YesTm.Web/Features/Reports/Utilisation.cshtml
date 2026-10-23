@@ -59,8 +59,8 @@
             <i class="fa-regular fa-calendar me-1"></i><strong>Period</strong> @r.PeriodText ·
             <strong>Standard day</strong> @r.StdHoursPerDay.ToString("0.00") h (Duty Timing) ·
             <strong>Weekend</strong> @r.WeekendText ·
-            <strong>Source</strong> HRMS attendance for mapped technicians, calendar for the rest
-            (<a asp-page="/Hrms/Sync">mapping</a>).
+            <strong>Holidays / leave / week off</strong> = non-job time booked on the Time Booking screen
+            (<a asp-page="/Masters/NonJobActivity">activities</a>).
         </div>
 
         <div class="kpi-grid mb-3">
@@ -103,7 +103,6 @@
                         <tr>
                             <td>
                                 <strong>@t.TechCode</strong> @t.TechName
-                                @if (!t.Mapped) { <span class="badge-soft badge-mixed ms-1 unmapped" title="Not mapped to HRMS: holidays, leave and absence unknown">no HRMS</span> }
                             </td>
                             <td class="text-num">@D(a.ScheduledDays)</td>
                             <td class="text-num" title="@a.LeaveText">@(a.LeaveDays > 0 ? D(a.LeaveDays) : "")</td>
@@ -130,7 +129,9 @@
                                 + <b>@t.Kpi.BookedOt.ToString("N2")</b> OT = <b>@t.Kpi.PaidHours.ToString("N2")</b> h paid
                                 · Utilisation <b>@t.Kpi.WorkHours.ToString("N2")</b> ÷ <b>@t.Kpi.PaidHours.ToString("N2")</b>
                                 · Efficiency <b>@t.Kpi.StdEarned.ToString("N2")</b> ÷ <b>@t.Kpi.WorkHours.ToString("N2")</b>
-                                @if (a.HrmsDays > 0) { <text>· Clocked <b>@a.AttendanceHours.ToString("N2")</b> h vs booked <b>@t.Kpi.BookedNet.ToString("N2")</b> h</text> }
+                                @if (a.AttendanceHours > 0) { <text>· Clocked <b>@a.AttendanceHours.ToString("N2")</b> h vs booked <b>@t.Kpi.BookedNet.ToString("N2")</b> h</text> }
+                                @if (t.Kpi.NonProdHours > 0) { <text>· Non-productive <b>@t.Kpi.NonProdHours.ToString("N2")</b> h</text> }
+                                @if (t.Kpi.AbsenceHours > 0) { <text>· Absence booked <b>@t.Kpi.AbsenceHours.ToString("N2")</b> h</text> }
                                 @if (!string.IsNullOrEmpty(a.LeaveText)) { <text>· Leave: @a.LeaveText</text> }
                                 @if (a.Holidays.Count > 0) { <text>· Holidays: @string.Join(", ", a.Holidays)</text> }
                                 · <em>@a.Source</em>
@@ -168,8 +169,9 @@
         <details class="mt-3">
             <summary class="fw-semibold">How these figures are calculated</summary>
             <dl class="defs row mt-2 small">
-                <dt class="col-md-3">Scheduled days</dt><dd class="col-md-9">Calendar days − weekend/rostered off − public holidays (HRMS; half holidays = 0.5).</dd>
-                <dt class="col-md-3">Available days / hours</dt><dd class="col-md-9">Scheduled − approved leave − absent; × the standard day (@r.StdHoursPerDay.ToString("0.00") h).</dd>
+                <dt class="col-md-3">Scheduled days</dt><dd class="col-md-9">Calendar days − weekend (Duty Timing) and booked week-off − booked public holidays.</dd>
+                <dt class="col-md-3">Available days / hours</dt><dd class="col-md-9">Scheduled − booked leave (hours ÷ @r.StdHoursPerDay.ToString("0.00") h, so 4 h = 0.5 day); × the standard day.</dd>
+                <dt class="col-md-3">Booked hours</dt><dd class="col-md-9">Job time + idle + non-productive non-job time. Holiday / leave / off lines are not "booked work" — they lower availability instead.</dd>
                 <dt class="col-md-3">Booked normal / OT</dt><dd class="col-md-9">Hours on job time sheets in the period, split by the duty window (weekends &amp; holidays are all OT).</dd>
                 <dt class="col-md-3">Unbooked</dt><dd class="col-md-9">Available − booked normal: paid time no job carries (training, waiting, not entered…).</dd>
                 <dt class="col-md-3">Work / Travel / Idle</dt><dd class="col-md-9">Work = net hours on work lines minus idle; travel = travel segments + travel on lines; idle = waiting inside a segment.</dd>

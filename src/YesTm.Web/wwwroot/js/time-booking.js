@@ -12,9 +12,41 @@
     // ---- Header: auto-fill from the selected Job ----
     var jobSelect = document.getElementById("jobSelect");
     var lastJob = jobSelect ? jobSelect.value : "";
+    // Non-job activity (holiday / leave / off / idle …) picked in the Job list, else null.
+    var nonJob = null;
+    var ABSENCE = ["HOLIDAY", "LEAVE", "OFF"];
+    function readNonJob() {
+        var o = jobSelect && jobSelect.selectedIndex >= 0 ? jobSelect.options[jobSelect.selectedIndex] : null;
+        nonJob = o && o.getAttribute("data-nonjob") ? {
+            code: o.value, name: o.getAttribute("data-name") || o.text,
+            category: o.getAttribute("data-category") || "", paid: o.getAttribute("data-paid") !== "N"
+        } : null;
+        var note = document.getElementById("nonJobNote");
+        if (note) {
+            note.style.display = nonJob ? "block" : "none";
+            if (nonJob) note.innerHTML = "<i class='fa-solid fa-umbrella-beach me-1'></i><strong>Non-job time:</strong> " + esc(nonJob.name) +
+                (ABSENCE.indexOf(nonJob.category) !== -1
+                    ? " — absence: hours count as Normal (never OT) and reduce the technician's available hours. Use <em>To Date</em> in Add Task for several days."
+                    : " — time at work that is not job work.") + (nonJob.paid ? "" : " Unpaid: no labour cost.");
+        }
+    }
     if (jobSelect) {
         jobSelect.addEventListener("change", function () {
             var o = jobSelect.options[jobSelect.selectedIndex];
+            readNonJob();
+            if (nonJob) {
+                // No customer / equipment for non-job time; every booking is its own sheet (no one-sheet-per-job check).
+                clearHeaderAutofill();
+                // Leave / holiday … are not field work: default the location (and so the labour rate) to the workshop.
+                var locSelHdr = document.getElementById("location");
+                if (locSelHdr && (locSelHdr.value || "").toLowerCase() === "field") {
+                    var ws = Array.prototype.find.call(locSelHdr.options, function (x) { return x.value.toLowerCase() === "workshop"; });
+                    if (ws) locSelHdr.value = ws.value;
+                }
+                lastJob = jobSelect.value;
+                updateSelectedJobCode();
+                return;
+            }
             setVal("customerName", o.getAttribute("data-customer-name"));
             setVal("customerCode", o.getAttribute("data-customer-code"));
             setVal("industryCode", o.getAttribute("data-industry"));
@@ -107,6 +139,7 @@
     // selection when the job survives the filter (else reset it and clear the auto-fill).
     function rebuildJobs(jobs) {
         var current = jobSelect.value;
+        var njGroup = document.getElementById("nonJobGroup");
         jobSelect.innerHTML = "";
         var ph = document.createElement("option");
         ph.value = ""; ph.textContent = "— Select Job —";
@@ -127,6 +160,7 @@
             o.setAttribute("data-sheet-no", j.sheetNo || "");
             jobSelect.appendChild(o);
         });
+        if (njGroup) jobSelect.appendChild(njGroup);   // non-job activities are not location-bound
         jobSelect.value = current;
         if (jobSelect.value !== current) { jobSelect.value = ""; clearHeaderAutofill(); lastJob = ""; }
         updateSelectedJobCode();
@@ -227,7 +261,9 @@
         return {
             workDate: getVal("m_date"), start: getVal("m_start"), end: getVal("m_end"),
             lunch: hmToHours(getVal("m_lunch")), location: getVal("m_location"),
-            industry: getVal("industryCode"), travelStart: getVal("m_travel_start"), travelEnd: getVal("m_travel_end")
+            industry: nonJob ? "" : getVal("industryCode"),
+            travelStart: nonJob ? "" : getVal("m_travel_start"), travelEnd: nonJob ? "" : getVal("m_travel_end"),
+            nonJob: nonJob ? nonJob.code : ""
         };
     }
 
@@ -359,7 +395,7 @@
         var p = calcParams();
 
         var problems = [];
-        if (!taskSel.value) problems.push("Select a task.");
+        if (!nonJob && !taskSel.value) problems.push("Select a task.");
         if (!techSel.value) problems.push("Select a technician.");
         if (locSel && !locSel.value) problems.push("Select a job location.");
         if (!p.workDate) problems.push("Enter the task date.");
@@ -381,14 +417,36 @@
         }
         err.classList.add("d-none");
 
+        // Multi-day non-job booking (e.g. 5 days annual leave): one line per day.
+        var days = [p.workDate];
+        var dateTo = nonJob && editIndex === null ? getVal("m_date_to") : "";
+        if (dateTo) {
+            if (dateTo < p.workDate) problems.push("To Date must be on or after the date.");
+            else {
+                days = [];
+                var skipWeekend = document.getElementById("m_skip_weekend").checked;
+                for (var d = combine(p.workDate, "00:00"), last = combine(dateTo, "00:00"); d <= last; d = new Date(d.getTime() + 86400000)) {
+                    if (skipWeekend && duty.weekend.indexOf(d.getDay()) !== -1) continue;
+                    days.push(d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2));
+                }
+                if (!days.length) problems.push("No days left in that range after skipping the weekend.");
+                if (days.length > 62) problems.push("Book at most 62 days at a time.");
+            }
+            if (problems.length) {
+                err.innerHTML = problems.join("<br>");
+                err.classList.remove("d-none");
+                return;
+            }
+        }
+
         var taskOpt = taskSel.options[taskSel.selectedIndex];
         var techOpt = techSel.options[techSel.selectedIndex];
         var cost = r2(getVal("m_cost")), food = r2(getVal("m_food"));
 
         var line = {
-            taskCode: taskSel.value,
-            taskName: taskOpt.getAttribute("data-name") || taskOpt.text,
-            stdHours: num(taskOpt.getAttribute("data-std")),
+            taskCode: nonJob ? nonJob.code : taskSel.value,
+            taskName: nonJob ? nonJob.name : (taskOpt.getAttribute("data-name") || taskOpt.text),
+            stdHours: nonJob ? 0 : num(taskOpt.getAttribute("data-std")),
             techCode: techSel.value,
             techName: techOpt.getAttribute("data-name") || "",
             skill: getVal("m_skill"),
@@ -408,7 +466,8 @@
             overridden: isOverridden()
         };
 
-        if (editIndex === null) lines.push(line); else lines[editIndex] = line;
+        if (editIndex !== null) lines[editIndex] = line;
+        else days.forEach(function (d) { lines.push(Object.assign({}, line, { workDate: d })); });
 
         render();
         modal().hide();
@@ -465,7 +524,30 @@
         scheduleCalc(true);      // fetch the engine values to show which figures were adjusted
     }
 
+    // Non-job bookings have no task (the activity is the task) and no travel; a date range is allowed when adding.
+    function applyNonJobModal(isEditLine) {
+        var show = function (id, on) { var el = document.getElementById(id); if (el) el.style.display = on ? "" : "none"; };
+        show("m_task_wrap", !nonJob);
+        show("m_travel_wrap", !nonJob);
+        show("m_dateto_wrap", !!nonJob && !isEditLine);
+        // Non-job time carries hours only — no rate, cost or food. Absence also has no Normal/OT split
+        // (it is all normal); idle / training keep it because that time is spent at work.
+        var col = function (id, on) {
+            var el = document.getElementById(id), c = el && el.closest("[class*='col-']");
+            if (c) c.style.display = on ? "" : "none";
+        };
+        ["m_rate", "m_otrate", "m_cost", "m_food", "m_total", "m_skill"].forEach(function (id) { col(id, !nonJob); });
+        var absence = !!nonJob && ABSENCE.indexOf(nonJob.category) !== -1;
+        ["m_normal", "m_ot", "m_timetype"].forEach(function (id) { col(id, !absence); });
+        var hc = document.getElementById("m_hours_title");
+        if (hc) hc.textContent = nonJob ? "Hours" : "Hours & Cost";
+        var lbl = document.getElementById("m_date_label");
+        if (lbl) lbl.textContent = nonJob && !isEditLine ? "From Date" : "Date";
+        setVal("m_date_to", "");
+    }
+
     function setModalMode(isEdit) {
+        applyNonJobModal(isEdit);
         var title = document.getElementById("taskModalTitle");
         var btnText = document.getElementById("addLineBtnText");
         if (title) title.innerHTML = isEdit
@@ -577,4 +659,5 @@
 
     // Initialise the "Selected Job Code" display for the pre-selected job (edit mode / postback).
     updateSelectedJobCode();
+    readNonJob();
 })();

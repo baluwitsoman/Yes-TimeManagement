@@ -20,6 +20,7 @@ public static class MasterRegistration
         s.AddScoped<ICustomerIndustryRepository, CustomerIndustryRepository>();
         s.AddScoped<ITaskStdRepository, TaskStdRepository>();
         s.AddScoped<IJobLocationRepository, JobLocationRepository>();
+        s.AddScoped<INonJobActivityRepository, NonJobActivityRepository>();
         return s;
     }
 }
@@ -509,5 +510,67 @@ public sealed class TaskStdRepository(IDbConnectionFactory db) : ITaskStdReposit
         await c.ExecuteAsync(new CommandDefinition(
             "UPDATE TM_TASK_STD SET ACTIVE_YN=:yn WHERE TST_ID=:id",
             new { yn = active ? "Y" : "N", id }, cancellationToken: ct));
+    }
+}
+
+// ===================== Non-Job Activity (db/11) =====================
+
+public interface INonJobActivityRepository
+{
+    Task<IReadOnlyList<TM_NONJOB_ACTIVITY>> GetAllAsync(CancellationToken ct = default);
+    /// <summary>Active activities for the Time Booking job dropdown; empty when db/11 has not been run.</summary>
+    Task<IReadOnlyList<TM_NONJOB_ACTIVITY>> GetActiveAsync(CancellationToken ct = default);
+    Task<TM_NONJOB_ACTIVITY?> GetAsync(string code, CancellationToken ct = default);
+    Task UpsertAsync(TM_NONJOB_ACTIVITY e, decimal userId, bool isNew, CancellationToken ct = default);
+    Task SetActiveAsync(string code, bool active, decimal userId, CancellationToken ct = default);
+}
+
+public sealed class NonJobActivityRepository(IDbConnectionFactory db) : INonJobActivityRepository
+{
+    private const string Cols = "NJ_CODE, NJ_NAME, NJ_CATEGORY, NVL(NJ_PAID_YN,'Y') AS NJ_PAID_YN, NJ_SORT, NVL(ACTIVE_YN,'Y') AS ACTIVE_YN";
+
+    public async Task<IReadOnlyList<TM_NONJOB_ACTIVITY>> GetAllAsync(CancellationToken ct = default)
+    {
+        using var c = await db.CreateOpenConnectionAsync(ct);
+        return (await c.QueryAsync<TM_NONJOB_ACTIVITY>(new CommandDefinition(
+            $"SELECT {Cols} FROM TM_NONJOB_ACTIVITY ORDER BY NJ_SORT NULLS LAST, NJ_NAME", cancellationToken: ct))).AsList();
+    }
+
+    public async Task<IReadOnlyList<TM_NONJOB_ACTIVITY>> GetActiveAsync(CancellationToken ct = default)
+    {
+        using var c = await db.CreateOpenConnectionAsync(ct);
+        if (!await SchemaInfo.HasColumnAsync(c, "TM_NONJOB_ACTIVITY", "NJ_CODE", ct)) return [];
+        return (await c.QueryAsync<TM_NONJOB_ACTIVITY>(new CommandDefinition(
+            $"SELECT {Cols} FROM TM_NONJOB_ACTIVITY WHERE NVL(ACTIVE_YN,'Y') = 'Y' ORDER BY NJ_SORT NULLS LAST, NJ_NAME",
+            cancellationToken: ct))).AsList();
+    }
+
+    public async Task<TM_NONJOB_ACTIVITY?> GetAsync(string code, CancellationToken ct = default)
+    {
+        using var c = await db.CreateOpenConnectionAsync(ct);
+        if (!await SchemaInfo.HasColumnAsync(c, "TM_NONJOB_ACTIVITY", "NJ_CODE", ct)) return null;
+        return await c.QueryFirstOrDefaultAsync<TM_NONJOB_ACTIVITY>(new CommandDefinition(
+            $"SELECT {Cols} FROM TM_NONJOB_ACTIVITY WHERE NJ_CODE = :code", new { code }, cancellationToken: ct));
+    }
+
+    public async Task UpsertAsync(TM_NONJOB_ACTIVITY e, decimal userId, bool isNew, CancellationToken ct = default)
+    {
+        using var c = await db.CreateOpenConnectionAsync(ct);
+        var sql = isNew
+            ? @"INSERT INTO TM_NONJOB_ACTIVITY (NJ_CODE, NJ_NAME, NJ_CATEGORY, NJ_PAID_YN, NJ_SORT, ACTIVE_YN, CREATION_USER_ID, CREATION_DATE)
+                VALUES (:NJ_CODE, :NJ_NAME, :NJ_CATEGORY, :NJ_PAID_YN, :NJ_SORT, :ACTIVE_YN, :userId, SYSDATE)"
+            : @"UPDATE TM_NONJOB_ACTIVITY SET NJ_NAME=:NJ_NAME, NJ_CATEGORY=:NJ_CATEGORY, NJ_PAID_YN=:NJ_PAID_YN,
+                   NJ_SORT=:NJ_SORT, ACTIVE_YN=:ACTIVE_YN, UPDATE_USER_ID=:userId, UPDATE_DATE=SYSDATE
+                WHERE NJ_CODE=:NJ_CODE";
+        await c.ExecuteAsync(new CommandDefinition(sql,
+            new { e.NJ_CODE, e.NJ_NAME, e.NJ_CATEGORY, e.NJ_PAID_YN, e.NJ_SORT, e.ACTIVE_YN, userId }, cancellationToken: ct));
+    }
+
+    public async Task SetActiveAsync(string code, bool active, decimal userId, CancellationToken ct = default)
+    {
+        using var c = await db.CreateOpenConnectionAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition(
+            "UPDATE TM_NONJOB_ACTIVITY SET ACTIVE_YN=:yn, UPDATE_USER_ID=:userId, UPDATE_DATE=SYSDATE WHERE NJ_CODE=:code",
+            new { yn = active ? "Y" : "N", userId, code }, cancellationToken: ct));
     }
 }

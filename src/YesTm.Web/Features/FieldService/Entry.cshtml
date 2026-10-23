@@ -174,7 +174,7 @@
                     <option value="">— Select Technician —</option>
                     @foreach (var t in Model.Technicians)
                     {
-                        <option value="@t.PEMP_EMP_CODE" data-name="@t.PEMP_EMP_NAME">@t.PEMP_EMP_CODE — @t.PEMP_EMP_NAME</option>
+                        <option value="@t.PEMP_EMP_CODE" data-name="@t.PEMP_EMP_NAME" title="@t.PEMP_EMP_CODE">@t.PEMP_EMP_NAME</option>
                     }
                 </select>
             </div>

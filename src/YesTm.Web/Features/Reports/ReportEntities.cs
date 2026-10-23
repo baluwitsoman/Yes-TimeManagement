@@ -45,6 +45,17 @@ public sealed class TaskTimeReportRow
     public string? TL_SEGMENT_TYPE { get; set; }      // TRAVEL | WORK
     public decimal TL_IDLE_HOURS { get; set; }
     public string? TL_IDLE_REASON { get; set; }
+    /// <summary>Set when the line is non-job time (db/11): HOLIDAY | LEAVE | OFF | IDLE | NONPROD.</summary>
+    public string? NJ_CATEGORY { get; set; }
+    public string? NJ_NAME { get; set; }
+
+    public bool IsNonJob => !string.IsNullOrEmpty(NJ_CATEGORY);
+    /// <summary>Holiday / leave / week off — reduces availability, not booked work.</summary>
+    public bool IsAbsence => NJ_CATEGORY is "HOLIDAY" or "LEAVE" or "OFF";
+    /// <summary>Productive job work: a real job's work/field line (not travel, not non-job).</summary>
+    public bool IsJobWork => !IsNonJob && TL_SEGMENT_TYPE != "TRAVEL";
+    /// <summary>Idle: waiting inside a job segment, or a whole IDLE non-job line.</summary>
+    public decimal IdleHours => NJ_CATEGORY == "IDLE" ? TL_NET_HOURS : TL_IDLE_HOURS;
 
     // Window aggregates — identical on every row of a given filtered set.
     public int TOTAL_ROWS { get; set; }

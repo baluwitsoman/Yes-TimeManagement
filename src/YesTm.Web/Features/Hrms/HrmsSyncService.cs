@@ -46,15 +46,23 @@ public sealed class HrmsSyncService
             var employees = await _client.GetEmployeesAsync(ct);
             await _repo.UpsertEmployeesAsync(employees, ct);
 
-            var attendance = await _client.GetAttendanceAsync(from, to, ct);
-            var rows = attendance.Where(a => !string.IsNullOrWhiteSpace(a.EMP_CODE))
-                .Select(a => ToEntity(a, logId)).ToList();
-            var written = await _repo.ReplaceAttendanceAsync(from, to, rows, ct);
+            // Attendance is optional (TimeManagement:Hrms:SyncAttendance) — off while leave/holiday/off
+            // are booked in TM as non-job activities.
+            var written = 0;
+            if (_opt.SyncAttendance)
+            {
+                var attendance = await _client.GetAttendanceAsync(from, to, ct);
+                var rows = attendance.Where(a => !string.IsNullOrWhiteSpace(a.EMP_CODE))
+                    .Select(a => ToEntity(a, logId)).ToList();
+                written = await _repo.ReplaceAttendanceAsync(from, to, rows, ct);
+            }
 
             var matches = EmployeeMatcher.Match(await _repo.GetTmEmployeesAsync(ct), employees);
             var newMatches = await _repo.SaveSuggestionsAsync(matches, ct);
 
-            var msg = $"{employees.Count} employees, {written} attendance days ({from:dd-MMM-yyyy} – {to:dd-MMM-yyyy}), {newMatches} mapping suggestion(s) updated.";
+            var msg = $"{employees.Count} employees" +
+                      (_opt.SyncAttendance ? $", {written} attendance days ({from:dd-MMM-yyyy} – {to:dd-MMM-yyyy})" : " (attendance sync off)") +
+                      $", {newMatches} mapping suggestion(s) updated.";
             await _repo.FinishLogAsync(logId, "OK", employees.Count, written, newMatches, msg, ct);
             _logger.LogInformation("HRMS sync ({Trigger}) OK: {Message}", trigger, msg);
             return new(true, employees.Count, written, newMatches, msg);

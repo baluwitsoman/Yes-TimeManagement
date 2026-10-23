@@ -75,7 +75,9 @@
                             <td>@s.TS_JOB_CODE</td>
                             <td>@s.TS_CUSTOMER_NAME</td>
                             <td>@s.TS_LOCATION@if (s.TS_SHEET_TYPE == YesTm.Web.Features.TimeBooking.SheetTypes.Field)
-                                { <span class="badge-soft badge-status ms-1" title="Field Service Report">FSR</span> }</td>
+                                { <span class="badge-soft badge-status ms-1" title="Field Service Report">FSR</span> }
+                                @if (s.TS_SHEET_TYPE == YesTm.Web.Features.TimeBooking.SheetTypes.NonJob)
+                                { <span class="badge-soft badge-mixed ms-1" title="Holiday / leave / off / idle — non-job time">Non-job</span> }</td>
                             <td><span class="badge-soft badge-status">@s.TS_JOB_STATUS</span></td>
                             <td class="text-num">@s.TS_TOTAL_NET_HOURS.ToString("N2")</td>
                             <td class="text-num">@s.TS_TOTAL_LABOUR_COST.ToString("N2")</td>

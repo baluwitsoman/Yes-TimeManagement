@@ -14,12 +14,15 @@ public class EntryModel : PageModel
 {
     private readonly ITimeBookingRepository _repo;
     private readonly IJobLocationRepository _locations;
+    private readonly INonJobActivityRepository _nonJobs;
     private readonly ILogger<EntryModel> _logger;
 
-    public EntryModel(ITimeBookingRepository repo, IJobLocationRepository locations, ILogger<EntryModel> logger)
+    public EntryModel(ITimeBookingRepository repo, IJobLocationRepository locations, INonJobActivityRepository nonJobs,
+        ILogger<EntryModel> logger)
     {
         _repo = repo;
         _locations = locations;
+        _nonJobs = nonJobs;
         _logger = logger;
     }
 
@@ -29,7 +32,13 @@ public class EntryModel : PageModel
     public IReadOnlyList<TaskLookup> Tasks { get; private set; } = [];
     public IReadOnlyList<WorkTypeLookup> WorkTypes { get; private set; } = [];
     public IReadOnlyList<CodeName> Locations { get; private set; } = [];
+    /// <summary>Holiday / leave / week-off / idle … listed with the jobs and booked the same way (db/11).</summary>
+    public IReadOnlyList<TM_NONJOB_ACTIVITY> NonJobs { get; private set; } = [];
     public DutyTimingDto Duty { get; private set; } = new();
+
+    /// <summary>The non-job activity chosen as the "job", or null for a real job.</summary>
+    private TM_NONJOB_ACTIVITY? NonJob => NonJobs.FirstOrDefault(a =>
+        string.Equals(a.NJ_CODE, Header.JobCode, StringComparison.OrdinalIgnoreCase));
     /// <summary>Job code → sheet no for jobs that already have an active time sheet (one sheet per job).</summary>
     public IReadOnlyDictionary<string, string> ExistingSheetNos { get; private set; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -214,7 +223,8 @@ public class EntryModel : PageModel
         if (Lines.Count == 0)
             ModelState.AddModelError(string.Empty, "Add at least one task line before posting.");
 
-        if (SheetTypes.IsFieldLocation(Header.Location))
+        var nonJob = NonJob;
+        if (nonJob is null && SheetTypes.IsFieldLocation(Header.Location))
             ModelState.AddModelError(string.Empty,
                 "Field jobs are booked on the Field Service Report screen (Time Booking → New Field Service Report).");
 
@@ -226,7 +236,8 @@ public class EntryModel : PageModel
         }
 
         // One time sheet per job: reject a second sheet (or an edit that re-points to a job that has one).
-        if (ModelState.IsValid && !string.IsNullOrWhiteSpace(Header.JobCode))
+        // Non-job activities (leave, holiday …) are exempt — each booking is its own sheet.
+        if (ModelState.IsValid && nonJob is null && !string.IsNullOrWhiteSpace(Header.JobCode))
         {
             try
             {
@@ -240,6 +251,10 @@ public class EntryModel : PageModel
                 _logger.LogWarning(ex, "Existing-sheet check failed for job {JobCode}", Header.JobCode);
             }
         }
+
+        // A technician may have several bookings on one day, but never two at the same time (any sheet).
+        if (ModelState.IsValid)
+            await CheckDoubleBookingAsync(ct);
 
         // Whatever fails below, the user must not lose the task lines already keyed in.
         ExistingLines = Lines;
@@ -342,8 +357,14 @@ public class EntryModel : PageModel
     /// Every returned value is a starting point the user may adjust before adding the line.
     /// </summary>
     public async Task<IActionResult> OnGetCalcLineAsync(DateTime? workDate, string? start, string? end, decimal? lunch,
-        string? location, string? industry, string? travelStart, string? travelEnd, CancellationToken ct)
+        string? location, string? industry, string? travelStart, string? travelEnd, string? nonJob, CancellationToken ct)
     {
+        TM_NONJOB_ACTIVITY? activity = null;
+        if (!string.IsNullOrWhiteSpace(nonJob))
+        {
+            try { activity = await _nonJobs.GetAsync(nonJob.Trim(), ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Non-job activity lookup failed for {Code}", nonJob); }
+        }
         var date = workDate ?? DateTime.Today;
         if (!TryCombine(date, start, out var startDt) || !TryCombine(date, end, out var endDt))
             return BadRequest(new { error = "Start and end times are required (HH:mm)." });
@@ -375,8 +396,10 @@ public class EntryModel : PageModel
         {
             return BadRequest(new { error = ex.Message });
         }
+        if (activity is not null) calc = NonJobRules.Apply(calc, activity);
+        var food = activity is null ? rate.FoodAllowance : 0m;
 
-        var travelHours = TravelHours(date, travelStart, travelEnd);
+        var travelHours = activity is null ? TravelHours(date, travelStart, travelEnd) : 0m;
         return new JsonResult(new
         {
             startDt = startDt.ToString("yyyy-MM-ddTHH:mm"),
@@ -389,10 +412,10 @@ public class EntryModel : PageModel
             rate = calc.NormalRate,
             otRate = calc.OtRate,
             labourCost = calc.LabourCost,
-            foodAllowance = rate.FoodAllowance,
-            totalCost = Math.Round(calc.LabourCost + rate.FoodAllowance, 2, MidpointRounding.AwayFromZero),
+            foodAllowance = food,
+            totalCost = Math.Round(calc.LabourCost + food, 2, MidpointRounding.AwayFromZero),
             travelHours,
-            rateFound = rate.Rate > 0
+            rateFound = rate.Rate > 0 || activity is not null
         });
     }
 
@@ -425,8 +448,9 @@ public class EntryModel : PageModel
     /// </summary>
     private async Task<(TM_TIME_SHEET header, List<TM_TIME_LINE> lines)> BuildHeaderAndLinesAsync(CancellationToken ct)
     {
-        var job = await _repo.GetJobAsync(Header.JobCode, ct);
-        var industryCode = job?.INDUSTRY_CODE ?? Header.IndustryCode;
+        var nonJob = NonJob;
+        var job = nonJob is null ? await _repo.GetJobAsync(Header.JobCode, ct) : null;
+        var industryCode = job?.INDUSTRY_CODE ?? (nonJob is null ? Header.IndustryCode : null);
 
         var duty = ToDutyTiming(Duty);
 
@@ -448,7 +472,13 @@ public class EntryModel : PageModel
                 rateByLocation[lineLocation] = rate;
             }
 
-            var stdHours = await _repo.GetTaskStdHoursAsync(l.TaskCode, ct);
+            // A non-job line's "task" is the activity itself — no standard hours.
+            var stdHours = nonJob is null ? await _repo.GetTaskStdHoursAsync(l.TaskCode, ct) : 0m;
+            if (nonJob is not null)
+            {
+                l.TaskCode = nonJob.NJ_CODE;
+                l.TaskName = nonJob.NJ_NAME;
+            }
 
             TryCombine(l.WorkDate, l.StartTime, out var startDt);
             TryCombine(l.WorkDate, l.EndTime, out var endDt);
@@ -457,6 +487,7 @@ public class EntryModel : PageModel
 
             var calc = TimeBookingCalculator.Calculate(
                 new TimeLineCalcInput(startDt, endDt, lunch, rate.Rate, rate.OvertimeMultiplier), duty);
+            if (nonJob is not null) calc = NonJobRules.Apply(calc, nonJob);
 
             // User-adjusted figures take precedence over the engine; note every deviation.
             var normalHours = R2(Math.Max(0m, l.NormalHours));
@@ -465,6 +496,15 @@ public class EntryModel : PageModel
             var otRate = R2(Math.Max(0m, l.OtRate));
             var labourCost = R2(Math.Max(0m, l.LabourCost));
             var food = R2(Math.Max(0m, l.FoodAllowance));
+            if (nonJob is not null)
+            {
+                // Absence (holiday/leave/off) is plain paid time: all Normal, never OT, no food or travel.
+                if (NonJobCategories.IsAbsence(nonJob.NJ_CATEGORY)) { normalHours = R2(normalHours + otHours); otHours = 0m; }
+                normalRate = otRate = labourCost = 0m;   // hours only — non-job time is not job cost
+                food = 0m;
+                l.TravelSite = l.TravelStart = l.TravelEnd = null;
+                l.TravelHours = 0m;
+            }
             var netHours = R2(normalHours + otHours);
 
             DateTime? travelStart = TryCombine(l.WorkDate, l.TravelStart, out var ts) ? ts : null;
@@ -477,7 +517,7 @@ public class EntryModel : PageModel
                 normalHours != calc.NormalHours || otHours != calc.OtHours ||
                 normalRate != calc.NormalRate || otRate != calc.OtRate ||
                 labourCost != TimeBookingCalculator.Cost(normalHours, otHours, normalRate, otRate) ||
-                food != R2(rate.FoodAllowance) ||
+                food != (nonJob is null ? R2(rate.FoodAllowance) : 0m) ||
                 (autoTravel > 0m && travelHours != autoTravel);
 
             var timeType = otHours <= 0m ? TimeType.Normal : normalHours <= 0m ? TimeType.Overtime : TimeType.Mixed;
@@ -555,11 +595,36 @@ public class EntryModel : PageModel
             TS_TOTAL_TRAVEL_HOURS = totalTravel,
             TS_TOTAL_COST = R2(totalCost + totalFood),
             TS_REMARKS = Header.Remarks,
-            TS_SHEET_TYPE = SheetTypes.Standard,
+            TS_SHEET_TYPE = nonJob is null ? SheetTypes.Standard : SheetTypes.NonJob,
             TS_CREATION_USER_ID = CurrentUserId()
         };
 
         return (header, lineEntities);
+    }
+
+    private async Task CheckDoubleBookingAsync(CancellationToken ct)
+    {
+        var posted = new List<BookedRange>();
+        for (var i = 0; i < Lines.Count; i++)
+        {
+            var l = Lines[i];
+            if (string.IsNullOrWhiteSpace(l.TechCode) || !TryCombine(l.WorkDate, l.StartTime, out var s) || !TryCombine(l.WorkDate, l.EndTime, out var e))
+                continue;
+            if (e <= s) e = e.AddDays(1);
+            posted.Add(new BookedRange(l.TechCode, l.TechName, s, e, $"line {i + 1}, {l.TaskName}"));
+        }
+        if (posted.Count == 0) return;
+        try
+        {
+            var existing = await _repo.GetBookedRangesAsync(posted.Select(p => p.TechCode).Distinct().ToList(),
+                posted.Min(p => p.Start), posted.Max(p => p.End), TsId, ct);
+            foreach (var msg in BookingOverlap.Find(posted, existing).Take(10))
+                ModelState.AddModelError(string.Empty, "Double booking — " + msg);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Double-booking check failed");
+        }
     }
 
     private decimal? CurrentUserId() =>
@@ -602,6 +667,8 @@ public class EntryModel : PageModel
             Tasks = await _repo.GetTasksAsync(ct);
             WorkTypes = await _repo.GetWorkTypesAsync(ct);
             Locations = await _locations.GetActiveAsync(ct);
+            try { NonJobs = await _nonJobs.GetActiveAsync(ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Non-job activities unavailable (db/11 not run?)"); }
             Duty = await _repo.GetDutyTimingAsync(ct);
             ExistingSheetNos = await _repo.GetActiveSheetNosByJobAsync(ct);
         }

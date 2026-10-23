@@ -36,6 +36,9 @@ public interface ITimeBookingRepository
     Task UpdateTimeSheetAsync(TM_TIME_SHEET header, IReadOnlyList<TM_TIME_LINE> lines, decimal? userId, CancellationToken ct = default,
         SheetChildWriter? children = null);
     Task VoidTimeSheetAsync(decimal tsId, decimal? userId, CancellationToken ct = default);
+    /// <summary>Lines of these technicians on other ACTIVE sheets that touch [from, to) — for the double-booking check.</summary>
+    Task<IReadOnlyList<YesTm.Web.Common.TimeCalc.BookedRange>> GetBookedRangesAsync(IReadOnlyCollection<string> techCodes,
+        DateTime from, DateTime to, decimal? excludeTsId, CancellationToken ct = default);
 }
 
 public sealed class TimeBookingRepository : ITimeBookingRepository
@@ -238,11 +241,12 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
 
     public async Task<IReadOnlyList<TechnicianLookup>> GetTechniciansAsync(CancellationToken ct = default)
     {
+        // Active employees, duplicates (HRMS copies of the same person) hidden — see EmployeeSql.
         const string sql = @"
             SELECT PEMP_EMP_CODE, PEMP_EMP_NAME
-            FROM   PPM_EMPLOYEE_DETAILS
-            WHERE  PEMP_EMP_CODE IS NOT NULL and pemp_emp_active='Y'
-            ORDER  BY PEMP_EMP_NAME";
+            FROM   " + EmployeeSql.Distinct + @"
+            WHERE  NVL(PEMP_EMP_ACTIVE,'Y') = 'Y'
+            ORDER  BY UPPER(TRIM(PEMP_EMP_NAME)), PEMP_EMP_CODE";
 
         using var conn = await _db.CreateOpenConnectionAsync(ct);
         var rows = await conn.QueryAsync<TechnicianLookup>(new CommandDefinition(sql, cancellationToken: ct));
@@ -441,6 +445,31 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             _logger.LogError(ex, "Failed to update time sheet {TsId}", header.TS_ID);
             throw;
         }
+    }
+
+    public async Task<IReadOnlyList<YesTm.Web.Common.TimeCalc.BookedRange>> GetBookedRangesAsync(IReadOnlyCollection<string> techCodes,
+        DateTime from, DateTime to, decimal? excludeTsId, CancellationToken ct = default)
+    {
+        if (techCodes.Count == 0) return [];
+        const string sql = @"
+            SELECT l.TL_TECH_CODE, l.TL_TECH_NAME, l.TL_START_DT, l.TL_END_DT,
+                   s.TS_SHEET_NO, s.TS_JOB_CODE, l.TL_TASK_NAME
+            FROM   TM_TIME_LINE l
+            JOIN   TM_TIME_SHEET s ON s.TS_ID = l.TL_TS_ID
+            WHERE  NVL(s.TS_ACTIVE_YN,'Y') = 'Y'
+              AND  (:excludeTsId IS NULL OR s.TS_ID <> :excludeTsId)
+              AND  l.TL_TECH_CODE IN :techCodes
+              AND  l.TL_START_DT < :toDt AND l.TL_END_DT > :fromDt";
+        var p = new DynamicParameters();
+        p.Add("excludeTsId", excludeTsId, DbType.Decimal);
+        p.Add("techCodes", techCodes.ToArray());
+        p.Add("fromDt", from, DbType.DateTime);
+        p.Add("toDt", to, DbType.DateTime);
+        using var conn = await _db.CreateOpenConnectionAsync(ct);
+        var rows = await conn.QueryAsync<(string TL_TECH_CODE, string? TL_TECH_NAME, DateTime TL_START_DT, DateTime TL_END_DT,
+            string? TS_SHEET_NO, string? TS_JOB_CODE, string? TL_TASK_NAME)>(new CommandDefinition(sql, p, cancellationToken: ct));
+        return rows.Select(r => new YesTm.Web.Common.TimeCalc.BookedRange(r.TL_TECH_CODE, r.TL_TECH_NAME, r.TL_START_DT, r.TL_END_DT,
+            $"{r.TS_SHEET_NO} (job {r.TS_JOB_CODE}, {r.TL_TASK_NAME})")).ToList();
     }
 
     public async Task VoidTimeSheetAsync(decimal tsId, decimal? userId, CancellationToken ct = default)

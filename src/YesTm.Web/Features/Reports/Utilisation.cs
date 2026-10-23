@@ -35,12 +35,15 @@ public sealed class UtilisationService : IUtilisationService
 {
     private readonly IDbConnectionFactory _db;
     private readonly ITimeBookingRepository _booking;
+    private readonly bool _useHrmsAttendance;
     private readonly ILogger<UtilisationService> _logger;
 
-    public UtilisationService(IDbConnectionFactory db, ITimeBookingRepository booking, ILogger<UtilisationService> logger)
+    public UtilisationService(IDbConnectionFactory db, ITimeBookingRepository booking,
+        Microsoft.Extensions.Options.IOptions<YesTm.Web.Features.Hrms.HrmsOptions> hrms, ILogger<UtilisationService> logger)
     {
         _db = db;
         _booking = booking;
+        _useHrmsAttendance = hrms.Value.SyncAttendance;
         _logger = logger;
     }
 
@@ -75,6 +78,8 @@ public sealed class UtilisationService : IUtilisationService
         // Confirmed TM → HRMS mappings + their attendance in the period. Tables may not exist yet (10 not run).
         var maps = new Dictionary<string, (string Hrms, string? Name)>(StringComparer.OrdinalIgnoreCase);
         var att = new Dictionary<string, Dictionary<DateTime, AttendanceDay>>(StringComparer.OrdinalIgnoreCase);
+        // HRMS attendance only while that sync is switched on; otherwise absence comes from bookings.
+        if (_useHrmsAttendance)
         try
         {
             using var conn = await _db.CreateOpenConnectionAsync(ct);
@@ -120,18 +125,48 @@ public sealed class UtilisationService : IUtilisationService
         var list = techs.Select(kv =>
             {
                 maps.TryGetValue(kv.Key, out var map);
-                var avail = AvailabilityCalculator.Calculate(f, t, stdDay, weekend, att.GetValueOrDefault(kv.Key));
                 var r = kv.Value.Rows;
-                var work = r.Where(x => x.TL_SEGMENT_TYPE != "TRAVEL").Sum(x => x.TL_NET_HOURS - x.TL_IDLE_HOURS);
-                var travel = r.Where(x => x.TL_SEGMENT_TYPE == "TRAVEL").Sum(x => x.TL_NET_HOURS)
-                           + r.Where(x => x.TL_SEGMENT_TYPE != "TRAVEL").Sum(x => x.TL_TRAVEL_HOURS);
-                var kpi = new UtilisationKpi(avail, r.Sum(x => x.TL_NET_HOURS), r.Sum(x => x.TL_NORMAL_HOURS), r.Sum(x => x.TL_OT_HOURS),
-                    work, travel, r.Sum(x => x.TL_IDLE_HOURS), earned.GetValueOrDefault(kv.Key));
+                // Holiday / leave / week-off booked as non-job time define the absence days; HRMS attendance
+                // (when that sync is on) wins for the days it covers.
+                var days = BookedAbsenceDays(r, stdDay);
+                var hrms = att.GetValueOrDefault(kv.Key);
+                if (hrms is not null) foreach (var (d, a) in hrms) days[d] = a;
+                var source = hrms is { Count: > 0 } ? AvailabilitySources.Hrms : AvailabilitySources.Booked;
+                var avail = AvailabilityCalculator.Calculate(f, t, stdDay, weekend, days, source);
+
+                // Absence lines are not "booked time" — they already lowered availability.
+                var booked = r.Where(x => !x.IsAbsence).ToList();
+                var m = ReportMetrics.Of(r);
+                var kpi = new UtilisationKpi(avail, booked.Sum(x => x.TL_NET_HOURS), booked.Sum(x => x.TL_NORMAL_HOURS),
+                    booked.Sum(x => x.TL_OT_HOURS), m.Work, m.Travel, m.Idle, earned.GetValueOrDefault(kv.Key), m.NonProd, m.Absence);
                 return new TechUtilisation(kv.Key, kv.Value.Name ?? map.Name, map.Hrms, kpi);
             })
             .OrderBy(x => x.TechName).ThenBy(x => x.TechCode)
             .ToList();
 
         return new UtilisationReport(f, t, fromData, stdDay, weekend, list);
+    }
+
+    /// <summary>
+    /// Non-job absence lines → one attendance day per date: the category with most hours wins, and the
+    /// day fraction is hours ÷ standard day (capped at 1) — 4 h of leave on an 8 h day is half a day.
+    /// </summary>
+    public static Dictionary<DateTime, AttendanceDay> BookedAbsenceDays(IEnumerable<TaskTimeReportRow> rows, decimal stdDay)
+    {
+        var result = new Dictionary<DateTime, AttendanceDay>();
+        var perDay = rows.Where(x => x.IsAbsence && (x.TL_WORK_DATE ?? x.TL_START_DT).HasValue)
+            .GroupBy(x => (x.TL_WORK_DATE ?? x.TL_START_DT)!.Value.Date);
+        foreach (var day in perDay)
+        {
+            var top = day.GroupBy(x => x.NJ_CATEGORY!)
+                .Select(g => (Cat: g.Key, Hours: g.Sum(x => x.TL_NET_HOURS), Name: g.Select(x => x.NJ_NAME ?? x.TL_TASK_NAME).FirstOrDefault()))
+                .OrderByDescending(g => g.Hours).First();
+            var frac = stdDay > 0 ? Math.Min(1m, Math.Round(top.Hours / stdDay, 2)) : 1m;
+            if (frac <= 0) continue;
+            result[day.Key] = new AttendanceDay(day.Key, top.Cat,
+                LeaveDays: top.Cat == "LEAVE" ? frac : 0m, HolidayDays: top.Cat == "HOLIDAY" ? frac : 0m, AbsentDays: 0m,
+                ActualHours: 0m, LeaveName: top.Name, HolidayName: top.Name);
+        }
+        return result;
     }
 }

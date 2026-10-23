@@ -89,6 +89,8 @@ public static class SheetTypes
     public const string Standard = "STANDARD";
     /// <summary>Field job booked on the Field Service Report screen.</summary>
     public const string Field = "FIELD";
+    /// <summary>Holiday / leave / week-off / idle … booked against a non-job activity (TM_NONJOB_ACTIVITY).</summary>
+    public const string NonJob = "NONJOB";
 
     public static bool IsFieldLocation(string? location) =>
         string.Equals(location?.Trim(), "Field", StringComparison.OrdinalIgnoreCase);
