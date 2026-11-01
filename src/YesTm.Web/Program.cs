@@ -19,7 +19,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("Starting Yes Time Management web host");
+    Log.Information("Starting Yes Time Management web host {Version}", YesTm.Web.Common.AppVersion.Full);
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +43,7 @@ try
             options.Conventions.AuthorizeFolder("/Masters", Policies.AdminOrAbove); // masters: admin+
             options.Conventions.AuthorizeFolder("/JobCard", Policies.AdminOrAbove); // job cards: admin+
             options.Conventions.AuthorizeFolder("/Hrms", Policies.AdminOrAbove);    // HRMS sync + code mapping: admin+
+            options.Conventions.AuthorizeFolder("/JobCostPosting", Policies.AdminOrAbove); // finance posting setup + JV view: admin+
         });
 
     // Data access (Dapper over ODP.NET).
@@ -52,12 +53,14 @@ try
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
     builder.Services.AddScoped<ITimeBookingRepository, TimeBookingRepository>();
+    builder.Services.AddScoped<YesTm.Web.Features.JobCostPosting.IJobCostPostingService, YesTm.Web.Features.JobCostPosting.JobCostPostingService>();
     builder.Services.AddScoped<IAdministrationRepository, AdministrationRepository>();
     builder.Services.AddScoped<YesTm.Web.Features.JobCard.IJobCardRepository, YesTm.Web.Features.JobCard.JobCardRepository>();
     builder.Services.AddScoped<YesTm.Web.Features.Reports.IReportRepository, YesTm.Web.Features.Reports.ReportRepository>();
     builder.Services.AddScoped<YesTm.Web.Features.FieldService.IFieldServiceRepository, YesTm.Web.Features.FieldService.FieldServiceRepository>();
     builder.Services.AddMasterRepositories();
     builder.Services.AddScoped<YesTm.Web.Features.Reports.IUtilisationService, YesTm.Web.Features.Reports.UtilisationService>();
+    builder.Services.AddScoped<YesTm.Web.Features.Reports.IDayCoverageService, YesTm.Web.Features.Reports.DayCoverageService>();
 
     // HRMS attendance sync (company 39): typed client, sync service, nightly runner.
     builder.Services.Configure<YesTm.Web.Features.Hrms.HrmsOptions>(

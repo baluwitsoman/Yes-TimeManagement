@@ -76,8 +76,8 @@
             var tr = document.createElement("tr");
             tr.innerHTML = "<td>" + (i + 1) + "</td><td><strong>" + esc(c.code) + "</strong> — " + esc(c.name) + "</td>" +
                 "<td><input class='form-control form-control-sm' data-fa='" + i + "' maxlength='30' value=\"" + esc(c.fa) + "\"></td>" +
-                "<td class='text-num'>" + n2(t.work) + "</td><td class='text-num'>" + n2(t.travel) + "</td>" +
-                "<td class='text-num'>" + n2(t.idle) + "</td><td class='text-num'>" + n2(t.food) + "</td>" +
+                "<td class='text-num'>" + hoursToHM(t.work) + "</td><td class='text-num'>" + hoursToHM(t.travel) + "</td>" +
+                "<td class='text-num'>" + hoursToHM(t.idle) + "</td><td class='text-num'>" + n2(t.food) + "</td>" +
                 "<td><button type='button' class='btn btn-sm btn-outline-danger' data-rm='" + i + "' title='Remove'><i class='fa-solid fa-trash'></i></button></td>";
             body.appendChild(tr);
         });
@@ -312,8 +312,8 @@
             if (!day) return;
             var tr = document.createElement("tr");
             tr.className = "small text-muted";
-            tr.innerHTML = "<td colspan='6' class='text-end'>Day total</td><td class='text-num'>" + n2(dayTot.net) + "</td><td class='text-num'>" + n2(dayTot.normal) +
-                "</td><td class='text-num'>" + n2(dayTot.ot) + "</td><td class='text-num'>" + n2(dayTot.labour) + "</td><td class='text-num'>" + n2(dayTot.food) +
+            tr.innerHTML = "<td colspan='6' class='text-end'>Day total</td><td class='text-num'>" + hoursToHM(dayTot.net) + "</td><td class='text-num'>" + hoursToHM(dayTot.normal) +
+                "</td><td class='text-num'>" + hoursToHM(dayTot.ot) + "</td><td class='text-num'>" + n2(dayTot.labour) + "</td><td class='text-num'>" + n2(dayTot.food) +
                 "</td><td class='text-num'>" + n2(dayTot.labour + dayTot.food) + "</td><td></td>";
             body.appendChild(tr);
         }
@@ -346,9 +346,9 @@
                     (l.idle > 0 ? "<div class='small text-muted'>idle: " + esc(l.idleReason || "—") + "</div>" : "") + "</td>" +
                 "<td>" + esc(l.techCode) + "<div class='small text-muted'>" + esc(l.techName) + "</div></td>" +
                 "<td class='text-num'>" + hoursToHM(l.lunch) + "</td>" +
-                "<td class='text-num'>" + (l.idle ? n2(l.idle) : "") + "</td>" +
-                "<td class='text-num fw-semibold'>" + n2(l.net) + "</td>" +
-                "<td class='text-num'>" + n2(l.normal) + "</td><td class='text-num'>" + n2(l.ot) + "</td>" +
+                "<td class='text-num'>" + (l.idle ? hoursToHM(l.idle) : "") + "</td>" +
+                "<td class='text-num fw-semibold' title='" + n2(l.net) + " h'>" + hoursToHM(l.net) + "</td>" +
+                "<td class='text-num'>" + hoursToHM(l.normal) + "</td><td class='text-num'>" + hoursToHM(l.ot) + "</td>" +
                 "<td class='text-num'>" + n2(l.cost) + "</td><td class='text-num'>" + (l.food ? n2(l.food) : "") + "</td>" +
                 "<td class='text-num fw-semibold'>" + n2(l.cost + l.food) + "</td>" +
                 "<td class='text-nowrap'>" +
@@ -383,8 +383,8 @@
         $("segEmpty").style.display = lines.length ? "none" : "block";
 
         var vcost = vehicle();
-        setText("sWork", n2(t.work)); setText("sTravel", n2(t.travel)); setText("sIdle", n2(t.idle));
-        setText("sSplit", t.normal.toFixed(1) + " / " + t.ot.toFixed(1));
+        setText("sWork", hoursToHM(t.work)); setText("sTravel", hoursToHM(t.travel)); setText("sIdle", hoursToHM(t.idle));
+        setText("sSplit", hoursToHM(t.normal) + " / " + hoursToHM(t.ot));
         setText("sLabour", n2(t.labour)); setText("sFood", n2(t.food)); setText("sVehicle", n2(vcost));
         setText("sTotal", n2(t.labour + t.food + vcost));
         renderCrew(perTech);

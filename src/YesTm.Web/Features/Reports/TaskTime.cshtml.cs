@@ -8,12 +8,14 @@ public class TaskTimeModel : PageModel
 {
     private readonly IReportRepository _repo;
     private readonly IUtilisationService _utilisation;
+    private readonly IDayCoverageService _coverage;
     private readonly ILogger<TaskTimeModel> _logger;
 
-    public TaskTimeModel(IReportRepository repo, IUtilisationService utilisation, ILogger<TaskTimeModel> logger)
+    public TaskTimeModel(IReportRepository repo, IUtilisationService utilisation, IDayCoverageService coverage, ILogger<TaskTimeModel> logger)
     {
         _repo = repo;
         _utilisation = utilisation;
+        _coverage = coverage;
         _logger = logger;
     }
 
@@ -99,7 +101,11 @@ public class TaskTimeModel : PageModel
         // Availability needs every technician's rows for the period, so it ignores a text search on job/customer.
         var util = await _utilisation.BuildAsync(result.Rows, DateFrom, DateTo,
             includeAllMapped: IsAdmin && string.IsNullOrWhiteSpace(Search), ct);
-        var bytes = TaskTimeExcel.BuildTechnicianWise(result.Rows, FilterSummary(), util);
+        // Day check covers every working day of the period (the util period: filter dates, else first..last work date).
+        DayCoverageReport? coverage = null;
+        try { coverage = await _coverage.BuildAsync(util.From, util.To, IsAdmin ? null : User.EmpCode(), ct); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Day check unavailable"); }
+        var bytes = TaskTimeExcel.BuildTechnicianWise(result.Rows, FilterSummary(), util, coverage);
         return File(bytes, XlsxMime, $"TechnicianTaskReport_{DateTime.Now:yyyyMMdd_HHmm}.xlsx");
     }
 

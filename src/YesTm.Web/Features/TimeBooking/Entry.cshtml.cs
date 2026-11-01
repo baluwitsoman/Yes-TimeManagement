@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Oracle.ManagedDataAccess.Client;
 using YesTm.Web.Common.Security;
 using YesTm.Web.Common.TimeCalc;
+using YesTm.Web.Features.JobCostPosting;
 using YesTm.Web.Features.Masters;
 
 namespace YesTm.Web.Features.TimeBooking;
@@ -15,14 +16,16 @@ public class EntryModel : PageModel
     private readonly ITimeBookingRepository _repo;
     private readonly IJobLocationRepository _locations;
     private readonly INonJobActivityRepository _nonJobs;
+    private readonly IJobCostPostingService _jobCost;
     private readonly ILogger<EntryModel> _logger;
 
     public EntryModel(ITimeBookingRepository repo, IJobLocationRepository locations, INonJobActivityRepository nonJobs,
-        ILogger<EntryModel> logger)
+        IJobCostPostingService jobCost, ILogger<EntryModel> logger)
     {
         _repo = repo;
         _locations = locations;
         _nonJobs = nonJobs;
+        _jobCost = jobCost;
         _logger = logger;
     }
 
@@ -224,6 +227,13 @@ public class EntryModel : PageModel
             ModelState.AddModelError(string.Empty, "Add at least one task line before posting.");
 
         var nonJob = NonJob;
+        if (nonJob is not null)
+        {
+            // Leave / holiday / idle … have no labour type, location or job status — not required.
+            ModelState.Remove("Header.WorkTypeCode");
+            ModelState.Remove("Header.Location");
+            ModelState.Remove("Header.JobStatus");
+        }
         if (nonJob is null && SheetTypes.IsFieldLocation(Header.Location))
             ModelState.AddModelError(string.Empty,
                 "Field jobs are booked on the Field Service Report screen (Time Booking → New Field Service Report).");
@@ -277,7 +287,14 @@ public class EntryModel : PageModel
                 var sheetNo = await _repo.SaveTimeSheetAsync(header, lineEntities, ct);
                 TempData["Success"] = $"Time sheet {sheetNo} posted — {lineEntities.Count} task line(s), total cost {header.TS_TOTAL_COST:N2}.";
             }
+            AddJobCostMessages(TempData, _jobCost);
             return RedirectToPage("/TimeBooking/Index");
+        }
+        catch (JobCostPostingException ex)
+        {
+            _logger.LogWarning(ex, "Job cost posting blocked the save of time sheet {TsId}", TsId);
+            ModelState.AddModelError(string.Empty, "Not saved — finance posting: " + ex.Message);
+            return Page();
         }
         catch (OracleException ex) when (ex.Number == 1)
         {
@@ -431,6 +448,12 @@ public class EntryModel : PageModel
         {
             await _repo.VoidTimeSheetAsync(tsId, CurrentUserId(), ct);
             TempData["Success"] = "Time sheet voided.";
+            AddJobCostMessages(TempData, _jobCost);
+        }
+        catch (JobCostPostingException ex)
+        {
+            _logger.LogWarning(ex, "Job cost posting blocked voiding time sheet {TsId}", tsId);
+            TempData["Error"] = "Not voided — finance posting: " + ex.Message;
         }
         catch (Exception ex)
         {
@@ -465,8 +488,11 @@ public class EntryModel : PageModel
         foreach (var l in Lines)
         {
             lineNo++;
-            var lineLocation = string.IsNullOrWhiteSpace(l.Location) ? Header.Location : l.Location;
-            if (!rateByLocation.TryGetValue(lineLocation, out var rate))
+            // Non-job time has no location and no cost, so no labour rate is looked up.
+            var lineLocation = nonJob is not null ? null : string.IsNullOrWhiteSpace(l.Location) ? Header.Location : l.Location;
+            LabourRateResult rate;
+            if (lineLocation is null) rate = new LabourRateResult(0m, 1m, 0m);
+            else if (!rateByLocation.TryGetValue(lineLocation, out rate!))
             {
                 rate = await _repo.GetLabourRateAsync(lineLocation, industryCode, ct);
                 rateByLocation[lineLocation] = rate;
@@ -583,9 +609,9 @@ public class EntryModel : PageModel
             TS_SERVICE_TYPE = serviceType,
             TS_SERIAL_NO = job?.MTJ_SERIAL_NO ?? Header.SerialNo,
             TS_JOB_OPENING_DATE = job?.MTJ_JOB_OPENING_DATE,
-            TS_LOCATION = Header.Location,
-            TS_WORK_TYPE_CODE = Header.WorkTypeCode,
-            TS_JOB_STATUS = Header.JobStatus,
+            TS_LOCATION = nonJob is null ? Header.Location : null,
+            TS_WORK_TYPE_CODE = nonJob is null ? Header.WorkTypeCode : null,
+            TS_JOB_STATUS = nonJob is null ? Header.JobStatus : null,
             TS_TOTAL_NET_HOURS = totalNet,
             TS_TOTAL_LABOUR_COST = totalCost,
             TS_NORMAL_HOURS = totalNormal,
@@ -629,6 +655,12 @@ public class EntryModel : PageModel
 
     private decimal? CurrentUserId() =>
         decimal.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+
+    /// <summary>What the finance sync did (JV posted / updated, hours it could not cost) → the next page's info banner.</summary>
+    internal static void AddJobCostMessages(Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataDictionary tempData, IJobCostPostingService jobCost)
+    {
+        if (jobCost.LastMessages.Count > 0) tempData["Info"] = "Finance: " + string.Join(" ", jobCost.LastMessages);
+    }
 
     private static decimal R2(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
 

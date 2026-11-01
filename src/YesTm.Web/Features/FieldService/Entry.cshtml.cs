@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Oracle.ManagedDataAccess.Client;
 using YesTm.Web.Common.Security;
 using YesTm.Web.Common.TimeCalc;
+using YesTm.Web.Features.JobCostPosting;
 using YesTm.Web.Features.TimeBooking;
 
 namespace YesTm.Web.Features.FieldService;
@@ -20,12 +21,14 @@ public class EntryModel : PageModel
 
     private readonly ITimeBookingRepository _repo;
     private readonly IFieldServiceRepository _fsr;
+    private readonly IJobCostPostingService _jobCost;
     private readonly ILogger<EntryModel> _logger;
 
-    public EntryModel(ITimeBookingRepository repo, IFieldServiceRepository fsr, ILogger<EntryModel> logger)
+    public EntryModel(ITimeBookingRepository repo, IFieldServiceRepository fsr, IJobCostPostingService jobCost, ILogger<EntryModel> logger)
     {
         _repo = repo;
         _fsr = fsr;
+        _jobCost = jobCost;
         _logger = logger;
     }
 
@@ -318,12 +321,19 @@ public class EntryModel : PageModel
                 header.TS_ID = TsId.Value;
                 await _repo.UpdateTimeSheetAsync(header, lineEntities, userId, ct, writeFsr);
                 TempData["Success"] = $"Field service report updated — {lineEntities.Count} segment line(s), total cost {header.TS_TOTAL_COST + header.TS_VEHICLE_COST:N2}.";
+                TimeBooking.EntryModel.AddJobCostMessages(TempData, _jobCost);
                 return RedirectToPage("/TimeBooking/Index");
             }
 
             var sheetNo = await _repo.SaveTimeSheetAsync(header, lineEntities, ct, writeFsr);
             TempData["Success"] = $"Field service report {sheetNo} posted — {lineEntities.Count} segment line(s), total cost {header.TS_TOTAL_COST + header.TS_VEHICLE_COST:N2}.";
+            TimeBooking.EntryModel.AddJobCostMessages(TempData, _jobCost);
             return RedirectToPage("/TimeBooking/Index");
+        }
+        catch (JobCostPostingException ex)
+        {
+            _logger.LogWarning(ex, "Job cost posting blocked the save of field report {TsId}", TsId);
+            ModelState.AddModelError(string.Empty, "Not saved — finance posting: " + ex.Message);
         }
         catch (OracleException ex) when (ex.Number == 1)
         {

@@ -98,3 +98,14 @@ Browse to `http://<server>/YesTime` — it should redirect to
   identity (see step 4).
 - **HTTPS redirect loop / wrong port** — if the site is HTTP-only, either add an
   HTTPS binding or remove `app.UseHttpsRedirection()` for that environment.
+
+## Version / build number
+
+Every build and publish stamps the app with a new build number, shown in the sidebar footer and on the
+login page (hover for build time and git commit), e.g. `v1.2.0 · build 261024.1532`:
+
+- **Release** (`1.2.0`) — `<VersionPrefix>` in `src/YesTm.Web/YesTm.Web.csproj`; bump it by hand for each release.
+- **Build** (`261024.1532`) — automatic: build/publish time as `yyMMdd.HHmm`. No action needed.
+- **Commit** — the git commit of the build (only when git is available on the build machine).
+
+After deploying, check the footer: the build number must match the publish you just copied.

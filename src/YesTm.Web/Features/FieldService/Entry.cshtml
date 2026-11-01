@@ -26,6 +26,10 @@
         @if (Model.IsEditMode)
         {
             <a asp-page="/FieldService/Print" asp-route-tsId="@Model.TsId" target="_blank" class="btn btn-outline-secondary"><i class="fa-solid fa-print me-2"></i>Print FSR</a>
+            if (Model.IsAdmin)
+            {
+                <partial name="_FinanceJvModal" model="Model.TsId!.Value" />
+            }
         }
         <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Time Sheets</a>
     </div>

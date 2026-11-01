@@ -1,6 +1,7 @@
 using System.Data;
 using Dapper;
 using YesTm.Web.Common.Data;
+using YesTm.Web.Features.JobCostPosting;
 
 namespace YesTm.Web.Features.TimeBooking;
 
@@ -44,11 +45,13 @@ public interface ITimeBookingRepository
 public sealed class TimeBookingRepository : ITimeBookingRepository
 {
     private readonly IDbConnectionFactory _db;
+    private readonly IJobCostPostingService _jobCost;
     private readonly ILogger<TimeBookingRepository> _logger;
 
-    public TimeBookingRepository(IDbConnectionFactory db, ILogger<TimeBookingRepository> logger)
+    public TimeBookingRepository(IDbConnectionFactory db, IJobCostPostingService jobCost, ILogger<TimeBookingRepository> logger)
     {
         _db = db;
+        _jobCost = jobCost;
         _logger = logger;
     }
 
@@ -381,6 +384,8 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             }
 
             if (children is not null) await children(conn, tx, newId, ct);
+            // Job cost JV(s) in ERP finance — same transaction, so a failed posting keeps the sheet unsaved.
+            await _jobCost.SyncSheetAsync(conn, tx, newId, header.TS_CREATION_USER_ID, ct);
 
             tx.Commit();
             _logger.LogInformation("Posted time sheet {SheetNo} with {LineCount} line(s), cost {Cost}",
@@ -434,6 +439,7 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
             }
 
             if (children is not null) await children(conn, tx, header.TS_ID, ct);
+            await _jobCost.SyncSheetAsync(conn, tx, header.TS_ID, userId, ct);
 
             tx.Commit();
             _logger.LogInformation("Updated time sheet {SheetNo} ({TsId}) — {LineCount} line(s), cost {Cost}",
@@ -475,10 +481,22 @@ public sealed class TimeBookingRepository : ITimeBookingRepository
     public async Task VoidTimeSheetAsync(decimal tsId, decimal? userId, CancellationToken ct = default)
     {
         using var conn = await _db.CreateOpenConnectionAsync(ct);
-        await conn.ExecuteAsync(new CommandDefinition(
-            @"UPDATE TM_TIME_SHEET SET TS_ACTIVE_YN = 'N', TS_UPDATE_USER_ID = :userId, TS_UPDATE_DATE = SYSDATE
-              WHERE TS_ID = :tsId AND NVL(TS_ACTIVE_YN,'Y') = 'Y'",
-            new { tsId, userId }, cancellationToken: ct));
+        using var tx = conn.BeginTransaction();
+        try
+        {
+            await conn.ExecuteAsync(new CommandDefinition(
+                @"UPDATE TM_TIME_SHEET SET TS_ACTIVE_YN = 'N', TS_UPDATE_USER_ID = :userId, TS_UPDATE_DATE = SYSDATE
+                  WHERE TS_ID = :tsId AND NVL(TS_ACTIVE_YN,'Y') = 'Y'",
+                new { tsId, userId }, tx, cancellationToken: ct));
+            // A voided sheet takes its job cost JV(s) with it.
+            await _jobCost.RemoveSheetAsync(conn, tx, tsId, userId, ct);
+            tx.Commit();
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
         _logger.LogInformation("Voided time sheet {TsId} by user {UserId}", tsId, userId);
     }
 }

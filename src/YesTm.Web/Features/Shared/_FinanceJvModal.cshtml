@@ -1,0 +1,29 @@
+@* "Finance JV" button + modal for a saved time sheet (admin+). Model = TS_ID. *@
+@model decimal
+<button type="button" class="btn btn-outline-primary" data-fin-jv="@Url.Page("/JobCostPosting/SheetJv", new { tsId = Model })">
+    <i class="fa-solid fa-file-invoice-dollar me-2"></i>Finance JV</button>
+
+<div class="modal fade" id="finJvModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-file-invoice-dollar me-2 text-primary"></i>Finance JV — job cost posted</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="finJvBody"></div>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-fin-jv]");
+        if (!b) return;
+        var body = document.getElementById("finJvBody");
+        body.innerHTML = '<div class="text-muted"><i class="fa-solid fa-spinner fa-spin me-2"></i>Loading…</div>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("finJvModal")).show();
+        fetch(b.getAttribute("data-fin-jv"), { credentials: "same-origin" })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(function (html) { body.innerHTML = html; })
+            .catch(function () { body.innerHTML = '<div class="alert alert-danger mb-0">Could not load the finance JV.</div>'; });
+    });
+</script>

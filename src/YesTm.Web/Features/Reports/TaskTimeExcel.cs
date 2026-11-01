@@ -86,7 +86,7 @@ public static class TaskTimeExcel
     /// technician whose lines are grouped by Job → Sheet with subtotals per job and a technician total.
     /// </summary>
     public static byte[] BuildTechnicianWise(IReadOnlyList<TaskTimeReportRow> rows, string filterSummary,
-        UtilisationReport? utilisation = null)
+        UtilisationReport? utilisation = null, DayCoverageReport? coverage = null)
     {
         using var wb = new XLWorkbook();
 
@@ -98,8 +98,13 @@ public static class TaskTimeExcel
                 Name = g.Select(x => x.TL_TECH_NAME).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)) ?? "",
                 Rows = g.ToList()
             })
-            .OrderBy(t => t.Name).ThenBy(t => t.Code)
             .ToList();
+        // Technicians expected to book who have no line in the selection still get a row (all days missed).
+        if (coverage is not null)
+            foreach (var c in coverage.Technicians.Where(c => !byTech.Any(t => string.Equals(t.Code, c.TechCode, StringComparison.OrdinalIgnoreCase))))
+                byTech.Add(new { Code = c.TechCode, Name = c.TechName ?? "", Rows = new List<TaskTimeReportRow>() });
+        byTech = byTech.OrderBy(t => t.Name.ToUpperInvariant()).ThenBy(t => t.Code).ToList();
+        var cov = coverage?.Technicians.ToDictionary(c => c.TechCode, StringComparer.OrdinalIgnoreCase);
 
         // ---- Summary tab ----
         // Standard hours are earned per job + task and shared among the technicians by their share of
@@ -112,7 +117,8 @@ public static class TaskTimeExcel
         sum.Cell(3, 1).Value = $"Generated {DateTime.Now:dd-MMM-yyyy HH:mm} · {byTech.Count} technician(s) · {rows.Count} task line(s)";
         sum.Range(2, 1, 3, 1).Style.Font.FontColor = XLColor.DimGray;
 
-        string[] sumHeaders = ["Tech Code", "Technician", "Jobs", "Task Lines", "Std Hrs", "Work Hrs", "Efficiency %",
+        string[] sumHeaders = ["Tech Code", "Technician", "Jobs", "Task Lines",
+            "Working Days", "Booked Days", "Missed Days", "Short Days", "Std Hrs", "Work Hrs", "Efficiency %",
             "Travel Hrs", "Idle Hrs", "Absence Hrs", "Non-prod Hrs", "Net Hrs", "Normal Hrs", "OT Hrs", "Labour Cost", "Food Allowance", "Total Cost"];
         for (var c = 0; c < sumHeaders.Length; c++) sum.Cell(5, c + 1).Value = sumHeaders[c];
         StyleHeader(sum.Range(5, 1, 5, sumHeaders.Length));
@@ -122,25 +128,41 @@ public static class TaskTimeExcel
         {
             sum.Cell(sr, 1).Value = t.Code;
             sum.Cell(sr, 2).Value = t.Name;
-            sum.Cell(sr, 3).Value = t.Rows.Select(x => x.TL_JOB_CODE).Distinct().Count();
+            sum.Cell(sr, 3).Value = t.Rows.Where(x => !x.IsNonJob).Select(x => x.TL_JOB_CODE).Distinct().Count();   // real jobs only
             sum.Cell(sr, 4).Value = t.Rows.Count;
-            WriteJobFigures(sum, sr, 5, Kpi(t.Rows, earned.GetValueOrDefault(t.Code)), Sum(t.Rows));
+            if (cov is not null && cov.TryGetValue(t.Code, out var c))
+            {
+                sum.Cell(sr, 5).Value = c.WorkingDays;
+                sum.Cell(sr, 6).Value = c.BookedDays;
+                sum.Cell(sr, 7).Value = c.MissedDays;
+                sum.Cell(sr, 8).Value = c.ShortDays;
+                if (c.MissedDays > 0) sum.Cell(sr, 7).Style.Fill.BackgroundColor = XLColor.FromHtml("#F8D7DA");
+                if (c.ShortDays > 0) sum.Cell(sr, 8).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF3CD");
+            }
+            WriteJobFigures(sum, sr, 9, Kpi(t.Rows, earned.GetValueOrDefault(t.Code)), Sum(t.Rows));
             sr++;
         }
         sum.Cell(sr, 2).Value = "Grand Total";
-        sum.Cell(sr, 3).Value = rows.Select(x => x.TL_JOB_CODE).Distinct().Count();
+        sum.Cell(sr, 3).Value = rows.Where(x => !x.IsNonJob).Select(x => x.TL_JOB_CODE).Distinct().Count();
         sum.Cell(sr, 4).Value = rows.Count;
-        WriteJobFigures(sum, sr, 5, Kpi(rows, earned.Values.Sum()), Sum(rows));
+        if (coverage is not null && sr > 6)
+            foreach (var col in new[] { 5, 6, 7, 8 })
+                sum.Cell(sr, col).FormulaA1 = $"SUM({sum.Column(col).ColumnLetter()}6:{sum.Column(col).ColumnLetter()}{sr - 1})";
+        WriteJobFigures(sum, sr, 9, Kpi(rows, earned.Values.Sum()), Sum(rows));
         sum.Range(sr, 1, sr, sumHeaders.Length).Style.Font.Bold = true;
-        sum.Range(6, 5, sr, sumHeaders.Length).Style.NumberFormat.Format = NumFmt;
+        sum.Range(6, 9, sr, sumHeaders.Length).Style.NumberFormat.Format = NumFmt;
         sum.SheetView.FreezeRows(5);
         sum.Columns().AdjustToContents();
+        sum.Column(1).Width = Math.Min(sum.Column(1).Width, 14);
+        WriteColumnNotes(sum, sr + 2, sumHeaders, coverage?.StdHoursPerDay, coverage is null ? null
+            : $"Period {coverage.From:dd-MMM-yyyy} to {coverage.To:dd-MMM-yyyy} · weekend {string.Join(", ", coverage.Weekend)} · standard day {coverage.StdHoursPerDay:0.00} h");
 
+        if (coverage is not null) AddDayCheckSheet(wb, coverage);
         if (utilisation is not null) AddUtilisationSheet(wb, utilisation, filterSummary);
 
-        // ---- One tab per technician ----
-        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Summary", "Utilisation", "Definitions" };
-        foreach (var t in byTech)
+        // ---- One tab per technician (only those with lines) ----
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Summary", "Day Check", "Utilisation", "Definitions" };
+        foreach (var t in byTech.Where(t => t.Rows.Count > 0))
         {
             var ws = wb.AddWorksheet(SheetName(t.Code, t.Name, usedNames));
             ws.Cell(1, 1).Value = $"{t.Code} — {t.Name}";
@@ -235,6 +257,7 @@ public static class TaskTimeExcel
         sum.Columns().AdjustToContents();
         sum.Column(1).Width = Math.Max(sum.Column(1).Width, 10);
         sum.Column(2).Width = Math.Min(sum.Column(2).Width, 40);
+        WriteColumnNotes(sum, sr + 2, headers, null, null);
 
         // ---- One tab per job ----
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Summary", "Definitions" };
@@ -421,8 +444,8 @@ public static class TaskTimeExcel
 
         ws.Range(first, 5, r, 28).Style.NumberFormat.Format = NumFmt;
         ws.Range(first, 23, r, 26).Style.NumberFormat.Format = "0.0\"%\"";
-        ws.Range(first, 5, r, 7).Style.NumberFormat.Format = "0.##";
-        ws.Range(first, 8, r, 11).Style.NumberFormat.Format = "0.##";
+        // Day counts: "General" shows 17 / 0.5 without the trailing dot "0.##" leaves on whole numbers.
+        ws.Range(first, 5, r, 11).Style.NumberFormat.Format = "General";
         ws.SheetView.FreezeRows(hr);
         ws.SheetView.FreezeColumns(2);
         ws.Columns().AdjustToContents();
@@ -454,6 +477,11 @@ public static class TaskTimeExcel
         string[,] d =
         {
             { "Term", "Meaning", "Formula" },
+            { "Jobs", "Distinct real jobs worked (leave / holiday / idle … activities are not counted).", "" },
+            { "Working Days", "Days in the period that are not a weekend day (Duty Timing).", "Calendar − weekend days" },
+            { "Booked Days", "Working days with any hours booked — job or non-job (leave, holiday, idle…).", "" },
+            { "Missed Days", "Working days with NOTHING booked. Red on the Day Check tab.", "Working Days − Booked Days" },
+            { "Short Days", "Working days booked, but fewer hours than the standard day. Amber on the Day Check tab.", "Booked hours < Std Hrs / Day" },
             { "Calendar Days", "Every day in the report period.", "To − From + 1" },
             { "Weekend / Off", "Duty Timing weekend days, plus week-off / comp-off days booked as non-job time.", "" },
             { "Holidays", "Public holidays booked as non-job time (or from HRMS attendance when that sync is on).", "" },
@@ -492,6 +520,180 @@ public static class TaskTimeExcel
         ws.Column(3).Width = 60;
         ws.Range(4, 1, d.GetLength(0) + 2, 1).Style.Font.Bold = true;
         ws.Range(4, 2, d.GetLength(0) + 2, 3).Style.Alignment.WrapText = true;
+    }
+
+    /// <summary>
+    /// "Day Check" tab: technicians × dates, each cell the hours booked that day (all sheets, job and non-job).
+    /// Red = missed working day, amber = short day, blue = non-job (leave / holiday …, named in the cell note),
+    /// grey = weekend. Counts per technician at the right.
+    /// </summary>
+    public static void AddDayCheckSheet(XLWorkbook wb, DayCoverageReport c)
+    {
+        var ws = wb.AddWorksheet("Day Check");
+        ws.Cell(1, 1).Value = "Day Check — hours booked per technician per day";
+        ws.Cell(1, 1).Style.Font.Bold = true; ws.Cell(1, 1).Style.Font.FontSize = 14;
+        ws.Cell(2, 1).Value = $"{c.From:dd-MMM-yyyy} to {c.To:dd-MMM-yyyy} · standard day {c.StdHoursPerDay:0.00} h · hours shown as hh:mm · weekend {string.Join(", ", c.Weekend)} · all sheets (job + non-job), any report search ignored";
+        ws.Cell(2, 1).Style.Font.FontColor = XLColor.DimGray;
+        ws.Cell(3, 1).Value = "Missed"; ws.Cell(3, 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#F8D7DA");
+        ws.Cell(3, 2).Value = "Short (< std day)"; ws.Cell(3, 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF3CD");
+        ws.Cell(3, 3).Value = "Non-job (leave / holiday …)"; ws.Cell(3, 3).Style.Fill.BackgroundColor = XLColor.FromHtml("#CFE2FF");
+        ws.Cell(3, 4).Value = "Weekend"; ws.Cell(3, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#E9ECEF");
+
+        const int hr = 5;
+        ws.Cell(hr, 1).Value = "Tech Code";
+        ws.Cell(hr, 2).Value = "Technician";
+        var dates = new List<DateTime>();
+        for (var d = c.From; d <= c.To; d = d.AddDays(1)) dates.Add(d);
+        for (var i = 0; i < dates.Count; i++)
+        {
+            var cell = ws.Cell(hr, 3 + i);
+            cell.Value = dates[i].ToString("dd") + "\n" + dates[i].ToString("ddd");
+            cell.Style.Alignment.WrapText = true;
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            if (c.Weekend.Contains(dates[i].DayOfWeek)) cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#E9ECEF");
+        }
+        var tc = 3 + dates.Count;
+        string[] tail = ["Working Days", "Booked Days", "Missed Days", "Short Days", "Weekend Days Worked", "Missed Dates"];
+        for (var i = 0; i < tail.Length; i++) ws.Cell(hr, tc + i).Value = tail[i];
+        StyleHeader(ws.Range(hr, 1, hr, tc + tail.Length - 1));
+        for (var i = 0; i < dates.Count; i++)
+            if (c.Weekend.Contains(dates[i].DayOfWeek)) ws.Cell(hr, 3 + i).Style.Fill.BackgroundColor = XLColor.FromHtml("#D3D7DC");
+
+        var r = hr + 1;
+        foreach (var t in c.Technicians)
+        {
+            ws.Cell(r, 1).Value = t.TechCode;
+            ws.Cell(r, 2).Value = t.TechName;
+            for (var i = 0; i < t.Days.Count; i++)
+            {
+                var (date, status, b) = t.Days[i];
+                var cell = ws.Cell(r, 3 + i);
+                // Stored as an Excel time (hours ÷ 24) so it shows hh:mm (9:00, 9:05, 18:30) and still sums.
+                if (b is { Hours: > 0 }) cell.Value = (double)b.Hours / 24d;
+                cell.Style.NumberFormat.Format = "[h]:mm";
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                var fill = status switch
+                {
+                    DayStatus.Weekend => "#E9ECEF",
+                    DayStatus.Missed => "#F8D7DA",
+                    DayStatus.Short => "#FFF3CD",
+                    _ => null
+                };
+                if (b is { NonJobHours: > 0 })
+                {
+                    fill = status == DayStatus.Short ? "#FFF3CD" : "#CFE2FF";
+                    cell.CreateComment().AddText(b.NonJobNames ?? "Non-job");
+                }
+                if (fill is not null) cell.Style.Fill.BackgroundColor = XLColor.FromHtml(fill);
+            }
+            ws.Cell(r, tc).Value = t.WorkingDays;
+            ws.Cell(r, tc + 1).Value = t.BookedDays;
+            ws.Cell(r, tc + 2).Value = t.MissedDays;
+            ws.Cell(r, tc + 3).Value = t.ShortDays;
+            ws.Cell(r, tc + 4).Value = t.WeekendDaysWorked;
+            ws.Cell(r, tc + 5).Value = string.Join(", ", t.Days.Where(d => d.Status == DayStatus.Missed).Select(d => d.Date.ToString("dd-MMM")));
+            if (t.MissedDays > 0) ws.Cell(r, tc + 2).Style.Fill.BackgroundColor = XLColor.FromHtml("#F8D7DA");
+            if (t.ShortDays > 0) ws.Cell(r, tc + 3).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF3CD");
+            r++;
+        }
+        ws.Range(hr, 1, Math.Max(hr, r - 1), tc + tail.Length - 1).Style.Border.InsideBorder = XLBorderStyleValues.Hair;
+        ws.SheetView.FreezeRows(hr);
+        ws.SheetView.FreezeColumns(2);
+        ws.Column(1).Width = 11;
+        ws.Column(2).Width = 30;
+        for (var i = 0; i < dates.Count; i++) ws.Column(3 + i).Width = 6.5;
+        ws.Row(hr).Height = 30;
+        for (var i = 0; i < tail.Length - 1; i++) ws.Column(tc + i).Width = 10;
+        ws.Column(tc + tail.Length - 1).Width = 60;
+    }
+
+    /// <summary>
+    /// "How each column is calculated" — one row per summary column, in the order of the columns:
+    /// the column name, what it is / where the figure comes from, and the formula.
+    /// </summary>
+    private static readonly Dictionary<string, (string What, string Formula)> ColumnNotes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Tech Code"] = ("Technician's employee code ", ""),
+        ["Technician"] = ("Technician's name.", ""),
+        ["Job No"] = ("Job / work order number (ERP job card), or the non-job activity code (NJ-…) for leave, holiday, idle …", ""),
+        ["Customer"] = ("Customer of the job (blank for non-job time).", ""),
+        ["Location"] = ("Job location of the time sheet (Workshop / Field / …).", ""),
+        ["Job Status"] = ("Status entered on the time sheet.", ""),
+        ["Sheet No"] = ("Time sheet(s) holding the lines.", ""),
+        ["First Work Date"] = ("Earliest work date of the job's lines in the selection.", "MIN(work date)"),
+        ["Last Work Date"] = ("Latest work date of the job's lines in the selection.", "MAX(work date)"),
+        ["Technicians"] = ("Number of different technicians who booked on the job.", "COUNT DISTINCT(technician)"),
+        ["Jobs"] = ("Number of different real jobs the technician booked on. Non-job activities (leave, holiday, idle …) are not counted.", "COUNT DISTINCT(job), non-job excluded"),
+        ["Task Lines"] = ("Number of booked lines (one line = one technician, one date, one time range), job and non-job.", "COUNT(lines)"),
+        ["Working Days"] = ("Days in the report period that are not a weekend day (weekend from the Duty Timing master).", "Calendar days − weekend days"),
+        ["Booked Days"] = ("Working days with any hours booked on any time sheet — job or non-job. A leave / holiday day counts as booked.", "COUNT(working days with hours > 0)"),
+        ["Missed Days"] = ("Working days with NOTHING booked at all (red on the Day Check tab).", "Working Days − Booked Days"),
+        ["Short Days"] = ("Working days booked, but fewer hours than the standard day (amber on the Day Check tab).", "COUNT(days with 0 < hours < Std Hrs/Day)"),
+        ["Std Hrs"] = ("Earned standard hours. Each job + task's standard from the Task Std Hours master counts once per job, then is split among the technicians by their share of the work on it.",
+                       "Σ task standard × (technician's work hrs on that job+task ÷ all work hrs on it)"),
+        ["Work Hrs"] = ("Productive hours on real job lines. Travel lines and non-job lines (leave, holiday, idle, training) are excluded; idle time recorded inside a job segment is taken out.",
+                        "Σ (Net − Idle) on job work lines"),
+        ["Efficiency %"] = ("Speed against standard: 100 % = exactly the standard time, above 100 % = faster than standard.", "Std Hrs ÷ Work Hrs × 100"),
+        ["Travel Hrs"] = ("Travel segments (Field Service Report) plus travel time recorded on job lines.", "Σ travel lines + Σ travel hrs on lines"),
+        ["Idle Hrs"] = ("Waiting time: idle recorded inside job segments plus lines booked on the 'Idle / No Work' activity.", "Σ segment idle + Σ IDLE activity lines"),
+        ["Absence Hrs"] = ("Hours booked on holiday / leave / week-off activities. They are not work — they reduce the technician's available time.", "Σ HOLIDAY + LEAVE + OFF lines"),
+        ["Non-prod Hrs"] = ("Hours booked on non-productive activities (Training, Workshop Housekeeping …): present and paid, but not job work.", "Σ NONPROD activity lines"),
+        ["Net Hrs"] = ("All hours booked on the lines: end time − start time − lunch.", "Work + Travel + Idle + Absence + Non-prod"),
+        ["Normal Hrs"] = ("Part of Net inside the duty window (Duty Timing) on a working day. Absence is always Normal.", "Net − OT"),
+        ["OT Hrs"] = ("Part of Net before / after the duty window, and all hours on weekends.", "Net − Normal"),
+        ["Labour Cost"] = ("Labour cost of job lines at the Labour Rate master rate (by location + industry). Non-job time carries no cost.", "Normal × Rate + OT × OT Rate"),
+        ["Food Allowance"] = ("Food allowance entered on the lines.", "Σ food"),
+        ["Total Cost"] = ("Labour cost plus food allowance (field vehicle cost is on the Field Service Report).", "Labour Cost + Food Allowance"),
+    };
+
+    private static void WriteColumnNotes(IXLWorksheet ws, int row, IReadOnlyList<string> headers, decimal? stdDay, string? context)
+    {
+        var lastCol = headers.Count;
+        ws.Cell(row, 1).Value = "How each column is calculated";
+        ws.Cell(row, 1).Style.Font.Bold = true;
+        ws.Cell(row, 1).Style.Font.FontSize = 12;
+        if (context is not null)
+        {
+            ws.Cell(row + 1, 1).Value = context;
+            ws.Cell(row + 1, 1).Style.Font.FontColor = XLColor.DimGray;
+            row++;
+        }
+        row += 1;
+
+        // Layout: name in column A–B, explanation across the middle, formula across the right part.
+        var whatFrom = 3;
+        var formulaFrom = Math.Max(whatFrom + 2, lastCol - 5);
+        ws.Cell(row, 1).Value = "Column";
+        ws.Range(row, 1, row, 2).Merge();
+        ws.Cell(row, whatFrom).Value = "What it is / where it comes from";
+        ws.Range(row, whatFrom, row, formulaFrom - 1).Merge();
+        ws.Cell(row, formulaFrom).Value = "Formula";
+        ws.Range(row, formulaFrom, row, lastCol).Merge();
+        StyleHeader(ws.Range(row, 1, row, lastCol));
+
+        double Width(int from, int to) => Enumerable.Range(from, to - from + 1).Sum(c => ws.Column(c).Width);
+        var whatWidth = Width(whatFrom, formulaFrom - 1);
+        var formulaWidth = Width(formulaFrom, lastCol);
+
+        foreach (var h in headers)
+        {
+            if (!ColumnNotes.TryGetValue(h, out var n)) continue;
+            row++;
+            var what = h == "Short Days" && stdDay is { } sd ? n.What + $" Standard day = {sd:0.00} h." : n.What;
+            ws.Cell(row, 1).Value = h;
+            ws.Range(row, 1, row, 2).Merge().Style.Font.SetBold();
+            ws.Cell(row, whatFrom).Value = what;
+            ws.Range(row, whatFrom, row, formulaFrom - 1).Merge().Style.Alignment.SetWrapText(true);
+            ws.Cell(row, formulaFrom).Value = n.Formula;
+            ws.Range(row, formulaFrom, row, lastCol).Merge().Style.Alignment.SetWrapText(true);
+            ws.Range(row, formulaFrom, row, lastCol).Style.Font.FontColor = XLColor.FromHtml("#0B5CAD");
+            ws.Range(row, 1, row, lastCol).Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+            // Merged cells do not auto-grow: size the row from the longest wrapped text (≈1 char per width unit).
+            var lines = Math.Max(Math.Ceiling(what.Length / Math.Max(10, whatWidth * 1.1)),
+                                 Math.Ceiling(n.Formula.Length / Math.Max(10, formulaWidth * 1.1)));
+            ws.Row(row).Height = Math.Max(15, 15 * lines);
+            ws.Range(row, 1, row, lastCol).Style.Border.BottomBorder = XLBorderStyleValues.Hair;
+        }
     }
 
     // ---- shared writers ----

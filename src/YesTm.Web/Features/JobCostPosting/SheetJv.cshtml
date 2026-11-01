@@ -1,0 +1,106 @@
+@page
+@model YesTm.Web.Features.JobCostPosting.SheetJvModel
+@{
+    Layout = null;
+    var v = Model.View;
+    string Acct(YesTm.Web.Features.JobCostPosting.SheetJvLine l) =>
+        $"{l.FNAM_FNAM_CODE} — {l.FNAM_DESC?.Replace("YES/", "").Replace("/GEN/GEN/GEN", "").Trim()}";
+}
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger mb-0">@Model.Error</div>
+    return;
+}
+@if (!v.SchemaReady)
+{
+    <div class="alert alert-warning mb-0">Job Cost Posting is not installed yet (run <code>db/12_job_cost_posting.sql</code>).</div>
+    return;
+}
+
+<div class="d-flex flex-wrap gap-3 small text-muted mb-3">
+    <span>Sheet <strong class="text-body">@v.SheetNo</strong></span>
+    <span>Job <strong class="text-body">@v.JobCode</strong></span>
+    <span>Posting @(v.PostingEnabled ? "ON" : "OFF")</span>
+</div>
+
+@if (v.Vouchers.Count == 0)
+{
+    <div class="alert alert-secondary">
+        No finance JV for this sheet yet.
+        @if (!v.PostingEnabled) { <span>Posting is switched off in Job Cost Posting Setup.</span> }
+        else if (v.Preview is { Vouchers.Count: > 0 }) { <span>Save the sheet to post the cost shown below.</span> }
+    </div>
+}
+
+@foreach (var j in v.Vouchers)
+{
+    var dr = j.Lines.Where(l => l.FITD_BC_AMOUNT > 0).Sum(l => l.FITD_BC_AMOUNT);
+    var cr = -j.Lines.Where(l => l.FITD_BC_AMOUNT < 0).Sum(l => l.FITD_BC_AMOUNT);
+    <div class="border rounded p-3 mb-3">
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+            <span class="fw-semibold"><i class="fa-solid fa-file-invoice-dollar me-1 text-primary"></i>@j.FITH_SRL_NO</span>
+            <span>@j.FITH_DT.ToString("dd-MMM-yyyy")</span>
+            <span class="text-muted">GL / @j.FITH_JRNL_TYPE</span>
+            @if (j.Missing) { <span class="badge bg-danger">Deleted in ERP — re-save the sheet to post again</span> }
+            else if (j.FITH_STATUS == "P") { <span class="badge bg-success">Posted</span> }
+            else { <span class="badge bg-warning text-dark">Unposted</span> }
+            @if (j.PERIOD_STATUS is not null && j.PERIOD_STATUS != "O") { <span class="badge bg-secondary">Period closed</span> }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(j.FITH_NARRATION)) { <div class="small text-muted mb-2">@j.FITH_NARRATION</div> }
+        @if (j.Lines.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>#</th><th>Account</th><th>Job</th><th>Narration</th><th class="text-num">Debit</th><th class="text-num">Credit</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in j.Lines)
+                        {
+                            <tr>
+                                <td>@l.FITD_SRL_NO</td>
+                                <td class="small">@Acct(l)</td>
+                                <td>@l.FITD_TA_CODE1</td>
+                                <td class="small">@l.FITD_JRNL_LINE_NARRATION</td>
+                                <td class="text-num">@(l.FITD_BC_AMOUNT > 0 ? l.FITD_BC_AMOUNT.ToString("N3") : "")</td>
+                                <td class="text-num">@(l.FITD_BC_AMOUNT < 0 ? (-l.FITD_BC_AMOUNT).ToString("N3") : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="fw-semibold"><td colspan="4" class="text-end">Total (OMR)</td><td class="text-num">@dr.ToString("N3")</td><td class="text-num">@cr.ToString("N3")</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@if (v.Preview is { } p && (p.Vouchers.Count > 0 || p.Warnings.Count > 0))
+{
+    <h6 class="fw-semibold mt-3">How the cost is calculated <span class="small text-muted fw-normal">(current hours × Job Cost rates)</span></h6>
+    @foreach (var d in p.Vouchers)
+    {
+        <div class="table-responsive mb-2">
+            <table class="table table-sm mb-0">
+                <thead><tr><th colspan="2">@d.Month.ToString("MMM-yyyy") · JV date @d.JvDate.ToString("dd-MMM-yyyy")</th><th class="text-num">Qty</th><th class="text-num">Rate</th><th class="text-num">Amount</th></tr></thead>
+                <tbody>
+                    @foreach (var i in d.Items)
+                    {
+                        <tr>
+                            <td>@i.CostDesc</td>
+                            <td class="small">@(i.TechCode is null ? "" : $"{i.TechCode} {i.TechName}")</td>
+                            <td class="text-num">@i.Qty.ToString("N2") @i.Uom</td>
+                            <td class="text-num">@i.Rate.ToString("N3")</td>
+                            <td class="text-num">@i.Amount.ToString("N3")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr class="fw-semibold"><td colspan="4" class="text-end">Total</td><td class="text-num">@d.Total.ToString("N3")</td></tr></tfoot>
+            </table>
+        </div>
+    }
+    @foreach (var w in p.Warnings)
+    {
+        <div class="small text-warning-emphasis"><i class="fa-solid fa-triangle-exclamation me-1"></i>@w</div>
+    }
+}

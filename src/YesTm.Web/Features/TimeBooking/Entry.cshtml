@@ -15,7 +15,13 @@
             @(Model.IsEditMode ? $"Edit Time Sheet {Model.SheetNo}" : "Time Booking Posting")</h1>
         <p class="page-sub">Book technician time against a Work Order at <strong>Task</strong> level — <strong>one time sheet per Job</strong>. Net hours, Normal/Overtime split, rates, labour cost and food allowance are calculated as you enter each task and can be adjusted before posting.</p>
     </div>
-    <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Time Sheets</a>
+    <div class="d-flex gap-2">
+        @if (Model.IsEditMode && Model.IsAdmin)
+        {
+            <partial name="_FinanceJvModal" model="Model.TsId!.Value" />
+        }
+        <a asp-page="/TimeBooking/Index" class="btn btn-outline-secondary"><i class="fa-solid fa-list me-2"></i>All Time Sheets</a>
+    </div>
 </div>
 
 @if (Model.IsOffline)
@@ -340,8 +346,8 @@
                         <span class="text-muted small" id="m_overnight" style="display:none"><i class="fa-solid fa-moon me-1"></i>Ends next day</span>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Net Hrs <span class="badge-soft badge-status">auto</span></label>
-                        <input id="m_net" class="form-control field-auto" readonly />
+                        <label class="form-label">Net Hrs (hh:mm) <span class="badge-soft badge-status">auto</span></label>
+                        <input id="m_net" class="form-control field-auto" readonly placeholder="hh:mm" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Time Type <span class="badge-soft badge-status">auto</span></label>
@@ -349,9 +355,10 @@
                     </div>
                 </div>
 
+                <div id="m_hours_section">
                 <div class="section-h mt-4">
                     <i class="fa-solid fa-calculator"></i> <span id="m_hours_title">Hours &amp; Cost</span>
-                    <span class="text-muted small fw-normal ms-2">auto-calculated from duty timings &amp; labour rate — adjust any value if needed</span>
+                    <span class="text-muted small fw-normal ms-2" id="m_hours_sub">auto-calculated from duty timings &amp; labour rate — adjust any value if needed</span>
                     <span id="m_calcStatus" class="ms-auto small text-muted"></span>
                     <button type="button" id="m_recalc" class="btn btn-outline-secondary btn-sm ms-2" title="Discard adjustments and recalculate">
                         <i class="fa-solid fa-rotate me-1"></i>Recalculate</button>
@@ -360,10 +367,12 @@
                     <div class="col-md-3">
                         <label class="form-label">Normal Hrs <span class="tm-adj" data-for="normal"></span></label>
                         <input id="m_normal" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="normal" />
+                        <span class="text-muted small" id="m_normal_hm"></span>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">OT Hrs <span class="tm-adj" data-for="ot"></span></label>
                         <input id="m_ot" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="ot" />
+                        <span class="text-muted small" id="m_ot_hm"></span>
                         <span class="text-muted small">Normal + OT = Net; editing one moves hours to the other.</span>
                     </div>
                     <div class="col-md-3">
@@ -390,6 +399,7 @@
                     </div>
                 </div>
 
+                </div>
                 <div id="m_travel_wrap">
                 <div class="section-h mt-4"><i class="fa-solid fa-route"></i> Travel <span class="text-muted small fw-normal ms-2">optional</span></div>
                 <div class="row g-3">
@@ -408,6 +418,7 @@
                     <div class="col-md-3">
                         <label class="form-label">Total Travel Hrs <span class="tm-adj" data-for="travel"></span></label>
                         <input id="m_travel_hours" type="number" step="0.25" min="0" class="form-control tm-editable" data-key="travel" />
+                        <span class="text-muted small" id="m_travel_hm"></span>
                     </div>
                 </div>
                 </div>

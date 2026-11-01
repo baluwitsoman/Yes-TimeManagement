@@ -21,6 +21,14 @@
             code: o.value, name: o.getAttribute("data-name") || o.text,
             category: o.getAttribute("data-category") || "", paid: o.getAttribute("data-paid") !== "N"
         } : null;
+        // Customer / equipment / location / labour type / status mean nothing for leave, holiday, idle …
+        ["customerName", "openingDate", "industryCode", "brand", "equipType", "serviceType", "serialNo", "location"]
+            .map(function (id) { return document.getElementById(id); })
+            .concat([document.querySelector("[name='Header.WorkTypeCode']"), document.querySelector("[name='Header.JobStatus']")])
+            .forEach(function (el) {
+                var c = el && el.closest("[class*='col-']");
+                if (c) c.style.display = nonJob ? "none" : "";
+            });
         var note = document.getElementById("nonJobNote");
         if (note) {
             note.style.display = nonJob ? "block" : "none";
@@ -175,6 +183,22 @@
         return m ? { h: +m[1], m: +m[2] } : null;
     }
     function hmToHours(s) { var t = parseHM(s); return t ? r2(t.h + t.m / 60) : 0; }
+    // Net hours of the line in the modal: kept as a number for the arithmetic, shown as hh:mm.
+    var netHours = 0;
+    function setNet(h) {
+        netHours = h == null || h === "" ? 0 : r2(h);
+        setVal("m_net", h == null || h === "" ? "" : hoursToHM(netHours));
+        var el = document.getElementById("m_net");
+        if (el) el.title = h == null || h === "" ? "" : n2(netHours) + " h";
+        updateHmHints();
+    }
+    // Small "= h:mm" hints under the editable decimal hour fields.
+    function updateHmHints() {
+        [["m_normal", "m_normal_hm"], ["m_ot", "m_ot_hm"], ["m_travel_hours", "m_travel_hm"]].forEach(function (x) {
+            var el = document.getElementById(x[1]);
+            if (el) { var v = getVal(x[0]); el.textContent = v === "" ? "" : "= " + hoursToHM(v); }
+        });
+    }
     function hoursToHM(h) {
         var total = Math.round(num(h) * 60), hh = Math.floor(total / 60), mm = total % 60;
         return (hh < 10 ? "0" : "") + hh + ":" + (mm < 10 ? "0" : "") + mm;
@@ -301,7 +325,7 @@
     function applyCalc(r, preserveValues) {
         var prevNet = auto ? auto.netHours : null;
         auto = r;
-        setVal("m_net", n2(r.netHours));
+        setNet(r.netHours);
         setTimeType(r.timeType);
 
         if (preserveValues) {
@@ -315,6 +339,7 @@
         }
         updateTotal();
         updateAdjBadges();
+        updateHmHints();
     }
 
     function costFromFields() {
@@ -346,13 +371,14 @@
         inp.addEventListener("input", function () {
             var key = inp.getAttribute("data-key");
             manual[key] = true;
-            var net = num(getVal("m_net"));
+            var net = netHours;
             if (key === "normal") { setVal("m_ot", n2(Math.max(0, net - num(inp.value)))); manual.ot = true; }
             if (key === "ot") { setVal("m_normal", n2(Math.max(0, net - num(inp.value)))); manual.normal = true; }
             if (key !== "cost" && key !== "food" && key !== "travel" && !manual.cost) setVal("m_cost", n2(costFromFields()));
             setTimeType(timeTypeFrom(num(getVal("m_normal")), num(getVal("m_ot"))));
             updateTotal();
             updateAdjBadges();
+            updateHmHints();
         });
     });
 
@@ -405,7 +431,7 @@
         if (start && end && start.getTime() === end.getTime()) problems.push("End time must differ from start time.");
 
         var normal = r2(getVal("m_normal")), ot = r2(getVal("m_ot"));
-        var net = r2(getVal("m_net"));
+        var net = r2(netHours);
         if (!net && start && end) { var fb = localCalc(p.workDate, p.start, p.end, p.lunch); if (fb) { net = fb.netHours; if (!normal && !ot) { normal = fb.normalHours; ot = fb.otHours; } } }
         if (net <= 0) problems.push("Net hours must be greater than zero (check times and lunch break).");
         if (r2(normal + ot) !== r2(net)) problems.push("Normal + OT hours (" + n2(normal + ot) + ") must equal Net hours (" + n2(net) + ").");
@@ -449,8 +475,8 @@
             stdHours: nonJob ? 0 : num(taskOpt.getAttribute("data-std")),
             techCode: techSel.value,
             techName: techOpt.getAttribute("data-name") || "",
-            skill: getVal("m_skill"),
-            location: locSel ? locSel.value : "",
+            skill: nonJob ? "" : getVal("m_skill"),
+            location: nonJob ? "" : (locSel ? locSel.value : ""),
             workDate: p.workDate,
             startTime: p.start, endTime: p.end,
             overnight: !!(start && end && end <= start),
@@ -490,7 +516,7 @@
         setPicker("m_lunch", hoursToHM(duty.lunch != null ? duty.lunch : 0.5));
         setPicker("m_travel_start", ""); setPicker("m_travel_end", "");
         Object.keys(KEYS).forEach(function (k) { setVal(KEYS[k], ""); });
-        setVal("m_net", ""); setVal("m_total", ""); setTimeType("");
+        setNet(null); setVal("m_total", ""); setTimeType("");
         var status = document.getElementById("m_calcStatus"); if (status) status.textContent = "";
         updateAdjBadges();
         setModalMode(false);
@@ -512,7 +538,7 @@
         setPicker("m_start", l.startTime);
         setPicker("m_end", l.endTime);
         setPicker("m_lunch", hoursToHM(l.lunch));
-        setVal("m_net", n2(l.net)); setTimeType(l.timeType);
+        setNet(l.net); setTimeType(l.timeType);
         setVal("m_normal", n2(l.normal)); setVal("m_ot", n2(l.ot));
         setVal("m_rate", n2(l.rate)); setVal("m_otrate", n2(l.otRate));
         setVal("m_cost", n2(l.cost)); setVal("m_food", n2(l.food)); setVal("m_total", n2(l.total));
@@ -536,11 +562,15 @@
             var el = document.getElementById(id), c = el && el.closest("[class*='col-']");
             if (c) c.style.display = on ? "" : "none";
         };
-        ["m_rate", "m_otrate", "m_cost", "m_food", "m_total", "m_skill"].forEach(function (id) { col(id, !nonJob); });
+        ["m_rate", "m_otrate", "m_cost", "m_food", "m_total", "m_skill", "m_location"].forEach(function (id) { col(id, !nonJob); });
         var absence = !!nonJob && ABSENCE.indexOf(nonJob.category) !== -1;
         ["m_normal", "m_ot", "m_timetype"].forEach(function (id) { col(id, !absence); });
         var hc = document.getElementById("m_hours_title");
-        if (hc) hc.textContent = nonJob ? "Hours" : "Hours & Cost";
+        if (hc) hc.textContent = nonJob ? "Normal / OT split" : "Hours & Cost";
+        var hs = document.getElementById("m_hours_section");
+        if (hs) hs.style.display = absence ? "none" : "";
+        var hsub = document.getElementById("m_hours_sub");
+        if (hsub) hsub.style.display = nonJob ? "none" : "";
         var lbl = document.getElementById("m_date_label");
         if (lbl) lbl.textContent = nonJob && !isEditLine ? "From Date" : "Date";
         setVal("m_date_to", "");
@@ -569,7 +599,7 @@
             t.cost += l.cost; t.food += l.food; t.total += l.total; t.travel += l.travelHours;
 
             var travel = l.travelHours > 0 || l.travelSite
-                ? esc(l.travelSite || "") + (l.travelHours > 0 ? (l.travelSite ? " · " : "") + n2(l.travelHours) + " h" : "")
+                ? esc(l.travelSite || "") + (l.travelHours > 0 ? (l.travelSite ? " · " : "") + hoursToHM(l.travelHours) : "")
                 : "<span class='text-muted'>—</span>";
             var adj = l.overridden ? " <span class='badge-soft badge-adj' title='Contains user-adjusted values'>adj</span>" : "";
 
@@ -583,9 +613,9 @@
                 "<td class='text-nowrap'>" + esc(l.startTime) + " – " + esc(l.endTime) + (l.overnight ? " <i class='fa-solid fa-moon text-muted' title='Ends next day'></i>" : "") +
                     "<div class='small'>" + badgeFor(l.timeType) + adj + "</div></td>" +
                 "<td class='text-num'>" + hoursToHM(l.lunch) + "</td>" +
-                "<td class='text-num fw-semibold'>" + n2(l.net) + "</td>" +
-                "<td class='text-num'>" + n2(l.normal) + "</td>" +
-                "<td class='text-num'>" + n2(l.ot) + "</td>" +
+                "<td class='text-num fw-semibold' title='" + n2(l.net) + " h'>" + hoursToHM(l.net) + "</td>" +
+                "<td class='text-num' title='" + n2(l.normal) + " h'>" + hoursToHM(l.normal) + "</td>" +
+                "<td class='text-num' title='" + n2(l.ot) + " h'>" + hoursToHM(l.ot) + "</td>" +
                 "<td class='text-num text-nowrap'>" + n2(l.rate) + " / " + n2(l.otRate) + "</td>" +
                 "<td class='text-num'>" + n2(l.cost) + "</td>" +
                 "<td class='text-num'>" + n2(l.food) + "</td>" +
@@ -607,13 +637,13 @@
         });
 
         document.getElementById("emptyGrid").style.display = lines.length ? "none" : "block";
-        setText("footNet", n2(t.net)); setText("footNormal", n2(t.normal)); setText("footOt", n2(t.ot));
+        setText("footNet", hoursToHM(t.net)); setText("footNormal", hoursToHM(t.normal)); setText("footOt", hoursToHM(t.ot));
         setText("footCost", n2(t.cost)); setText("footFood", n2(t.food)); setText("footTotal", n2(t.total));
-        setText("footTravel", n2(t.travel) + " h");
-        setText("sumNet", n2(t.net)); setText("sumStd", n2(t.std));
-        setText("sumSplit", t.normal.toFixed(1) + " / " + t.ot.toFixed(1));
+        setText("footTravel", hoursToHM(t.travel));
+        setText("sumNet", hoursToHM(t.net)); setText("sumStd", hoursToHM(t.std));
+        setText("sumSplit", hoursToHM(t.normal) + " / " + hoursToHM(t.ot));
         setText("sumCost", n2(t.cost)); setText("sumFood", n2(t.food)); setText("sumTotal", n2(t.total));
-        setText("sumTravel", n2(t.travel)); setText("sumLines", lines.length);
+        setText("sumTravel", hoursToHM(t.travel)); setText("sumLines", lines.length);
     }
 
     function setText(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }

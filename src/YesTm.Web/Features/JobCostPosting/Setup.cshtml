@@ -1,0 +1,242 @@
+@page
+@model YesTm.Web.Features.JobCostPosting.SetupModel
+@using YesTm.Web.Features.JobCostPosting
+@{
+    ViewData["Title"] = "Job Cost Posting Setup";
+    var expense = Model.Accounts.Where(a => a.FNAM_FNAM_TYPE == "E").ToList();
+    var income = Model.Accounts.Where(a => a.FNAM_FNAM_TYPE == "I").ToList();
+}
+
+<div class="page-head">
+    <div>
+        <h1 class="page-title"><span class="ico"><i class="fa-solid fa-file-invoice-dollar"></i></span> Job Cost Posting Setup</h1>
+        <p class="page-sub">Time sheets → Yes ERP finance. Every save of a time sheet / field service report rebuilds its GL journal voucher, one per month;
+            voiding the sheet deletes it. Staff are already paid through payroll, so the entry <strong>absorbs</strong> cost into the job — it never adds a new expense.</p>
+    </div>
+    <button class="btn btn-primary" data-master-add data-title="Add Cost Code" @(Model.SchemaReady ? "" : "disabled")><i class="fa-solid fa-plus me-2"></i>Add Cost Code</button>
+</div>
+
+@if (Model.IsOffline)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-plug-circle-xmark me-2"></i>Database not reachable.</div>
+}
+else if (!Model.SchemaReady)
+{
+    <div class="alert alert-warning"><i class="fa-solid fa-database me-2"></i>Run <code>db/12_job_cost_posting.sql</code> to create the Job Cost Posting tables.</div>
+}
+else
+{
+    <div class="content-card mb-3">
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <form method="post" asp-page-handler="SaveSetup">
+                    <h6 class="fw-semibold mb-3">Posting</h6>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" id="enabledSwitch" name="Form.Enabled" value="true" @(Model.Form.Enabled ? "checked" : "") />
+                        <label class="form-check-label" for="enabledSwitch">
+                            Post job cost to finance on every time-sheet save
+                            @if (Model.Current.Enabled) { <span class="badge-soft badge-normal ms-2">ON</span> }
+                            else { <span class="badge-soft ms-2" style="background:#eee;color:#888">OFF</span> }
+                        </label>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Company</label>
+                            <input name="Form.CompCode" value="@Model.Form.CompCode" class="form-control" maxlength="10" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Branch <span class="text-muted small">(office)</span></label>
+                            <input name="Form.OffCode" value="@Model.Form.OffCode" class="form-control" maxlength="10" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">JV type</label>
+                            <select name="Form.JrnlType" class="form-select">
+                                @foreach (var t in Model.JournalTypes.DefaultIfEmpty("JRV"))
+                                {
+                                    <option value="@t" selected="@(t == Model.Form.JrnlType)">GL / @t</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Post work from</label>
+                            <input name="Form.StartDate" type="date" value="@(Model.Form.StartDate?.ToString("yyyy-MM-dd"))" class="form-control" />
+                        </div>
+                    </div>
+                    <p class="small text-muted mt-2 mb-3">Work dated before “Post work from” is never posted (cut-over), so re-saving an old sheet does not post history.</p>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save Settings</button>
+                </form>
+            </div>
+            <div class="col-lg-5">
+                <h6 class="fw-semibold mb-3">What one voucher looks like</h6>
+                <table class="table table-sm small mb-2">
+                    <thead><tr><th>Account</th><th>Job</th><th class="text-num">Dr</th><th class="text-num">Cr</th></tr></thead>
+                    <tbody>
+                        <tr><td>Job cost a/c (per cost code)</td><td>job code</td><td class="text-num">hours × rate</td><td></td></tr>
+                        <tr><td colspan="4" class="text-muted">… one line per employee × cost code, plus FSR km × km rate</td></tr>
+                        <tr><td>Absorbed a/c (contra)</td><td>—</td><td></td><td class="text-num">total</td></tr>
+                    </tbody>
+                </table>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li>Hours = net − idle. Idle hours, non-job sheets and food allowance are not posted; OT uses the same flat rate.</li>
+                    <li>One voucher per sheet per month, dated on the last work date of that month.</li>
+                    <li>A change in a month whose GL period is closed is refused — the sheet is not saved.</li>
+                    <li>Rates are effective-dated: add a new row with a later “Effective from” to change a rate.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.Gaps.Count > 0 || Model.Notes.Count > 0)
+    {
+        <div class="alert @(Model.Gaps.Count > 0 ? "alert-warning" : "alert-info")">
+            @if (Model.Gaps.Count > 0)
+            {
+                <div class="fw-semibold mb-1"><i class="fa-solid fa-triangle-exclamation me-2"></i>Complete before switching posting on:</div>
+                <ul class="mb-1">@foreach (var g in Model.Gaps) { <li>@g</li> }</ul>
+            }
+            @if (Model.Notes.Count > 0)
+            {
+                <ul class="mb-0 small">@foreach (var n in Model.Notes) { <li>@n</li> }</ul>
+            }
+        </div>
+    }
+
+    <div class="content-card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead><tr><th>Cost code</th><th>Type</th><th>Location</th><th class="text-num">Rate (OMR)</th><th>Dr — job cost a/c</th><th>Cr — absorbed a/c</th><th>Effective</th><th>Status</th><th style="width:110px"></th></tr></thead>
+                <tbody>
+                    @if (Model.Codes.Count == 0)
+                    {
+                        <tr><td colspan="9" class="grid-empty">No cost codes defined.</td></tr>
+                    }
+                    @foreach (var c in Model.Codes)
+                    {
+                        var active = c.Active;
+                        <tr class="@(active ? "" : "text-muted")">
+                            <td class="fw-semibold">@c.JCC_DESC</td>
+                            <td>@CostTypes.Label(c.JCC_TYPE)</td>
+                            <td>@(c.JCC_TYPE == CostTypes.Labour ? c.JCC_LOCATION : "—")</td>
+                            <td class="text-num">@c.JCC_RATE.ToString("N3") / @c.Uom</td>
+                            <td class="small @(c.JCC_DR_VEL_CODE is null ? "text-danger" : "")">@Model.AccountName(c.JCC_DR_VEL_CODE)</td>
+                            <td class="small @(c.JCC_CR_VEL_CODE is null ? "text-danger" : "")">@Model.AccountName(c.JCC_CR_VEL_CODE)</td>
+                            <td>@c.JCC_EFFECTIVE_FROM.ToString("dd-MMM-yyyy")</td>
+                            <td>
+                                @if (active) { <span class="badge-soft badge-normal">Active</span> }
+                                else { <span class="badge-soft" style="background:#eee;color:#888">Inactive</span> }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-row="@System.Text.Json.JsonSerializer.Serialize(c)"><i class="fa-solid fa-pen"></i></button>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="id" value="@c.JCC_ID" />
+                                    <input type="hidden" name="active" value="@(active ? "N" : "Y")" />
+                                    <button class="btn btn-sm @(active ? "btn-outline-danger" : "btn-outline-success")">
+                                        <i class="fa-solid @(active ? "fa-ban" : "fa-check")"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="modal fade" id="masterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form method="post" asp-page-handler="SaveCode" id="masterForm" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterModalTitle">Add Cost Code</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="IsEdit" value="false" />
+                <input type="hidden" name="Input.JCC_ID" data-default="0" />
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Type <span class="req">*</span></label>
+                        <select name="Input.JCC_TYPE" id="jccType" class="form-select" data-default="LABOUR">
+                            <option value="@CostTypes.Labour">Labour hours</option>
+                            <option value="@CostTypes.TravelHours">Travel hours</option>
+                            <option value="@CostTypes.TravelKm">Vehicle km</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="jccLocWrap">
+                        <label class="form-label">Job Location <span class="req">*</span></label>
+                        <select name="Input.JCC_LOCATION" class="form-select">
+                            <option value="">—</option>
+                            @foreach (var l in Model.Locations)
+                            {
+                                <option value="@l.CODE">@l.NAME</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Rate (OMR per <span id="jccUom">hour</span>) <span class="req">*</span></label>
+                        <input name="Input.JCC_RATE" type="number" step="0.001" min="0" class="form-control" required data-default="0" />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Description <span class="req">*</span></label>
+                        <input name="Input.JCC_DESC" class="form-control" maxlength="100" required placeholder="e.g. Field service labour" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Effective From</label>
+                        <input name="Input.JCC_EFFECTIVE_FROM" type="date" class="form-control" data-default="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Dr — job cost account <span class="text-muted small">(tagged with the job code; shows in job P&amp;L / GP)</span></label>
+                        <select name="Input.JCC_DR_VEL_CODE" class="form-select">
+                            <option value="">— select —</option>
+                            <optgroup label="Expense">
+                                @foreach (var a in expense) { <option value="@a.FNAM_VEL_CODE">@a.Display (@a.FNAM_FNAM_GROUP)</option> }
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Cr — absorbed / recovery account <span class="text-muted small">(contra under staff / vehicle cost, no job code)</span></label>
+                        <select name="Input.JCC_CR_VEL_CODE" class="form-select">
+                            <option value="">— select —</option>
+                            <optgroup label="Expense">
+                                @foreach (var a in expense) { <option value="@a.FNAM_VEL_CODE">@a.Display (@a.FNAM_FNAM_GROUP)</option> }
+                            </optgroup>
+                            @if (income.Count > 0)
+                            {
+                                <optgroup label="Income">
+                                    @foreach (var a in income) { <option value="@a.FNAM_VEL_CODE">@a.Display (@a.FNAM_FNAM_GROUP)</option> }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <select name="Input.ACTIVE_YN" class="form-select" data-default="Y">
+                            <option value="Y">Active</option>
+                            <option value="N">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-2"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/masters.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var type = document.getElementById("jccType");
+            function sync() {
+                var labour = type.value === "LABOUR";
+                document.getElementById("jccLocWrap").style.display = labour ? "" : "none";
+                document.getElementById("jccUom").textContent = type.value === "TRAVEL_KM" ? "km" : "hour";
+            }
+            type.addEventListener("change", sync);
+            document.getElementById("masterModal").addEventListener("shown.bs.modal", sync);
+        })();
+    </script>
+}

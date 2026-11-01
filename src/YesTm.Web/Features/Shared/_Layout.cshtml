@@ -59,6 +59,7 @@
                 <a class="nav-link @active("/masters/nonjobactivity")" asp-page="/Masters/NonJobActivity"><i class="fa-solid fa-umbrella-beach"></i><span>Non-Job Activities</span></a>
                 <a class="nav-link @active("/masters/task")" asp-page="/Masters/Task"><i class="fa-solid fa-list-check"></i><span>Task Master</span></a>
                 <a class="nav-link @active("/masters/taskstdhours")" asp-page="/Masters/TaskStdHours"><i class="fa-solid fa-stopwatch"></i><span>Task Std Hours</span></a>
+                <a class="nav-link @active("/jobcostposting")" asp-page="/JobCostPosting/Setup"><i class="fa-solid fa-file-invoice-dollar"></i><span>Job Cost Posting Setup</span></a>
                 <a class="nav-link @active("/hrms")" asp-page="/Hrms/Sync"><i class="fa-solid fa-arrows-rotate"></i><span>HRMS Sync &amp; Mapping</span></a>
             }
             else
@@ -78,7 +79,7 @@
                 </a>
             }
         </nav>
-        <div class="sidebar-foot">v0.1 &middot; Phase&nbsp;0</div>
+        <div class="sidebar-foot" title="@YesTm.Web.Common.AppVersion.Full">@YesTm.Web.Common.AppVersion.Short</div>
     </aside>
 
     <!-- Main column -->
@@ -120,6 +121,13 @@
             {
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
                     <i class="fa-solid fa-circle-check me-2"></i>@okMsg
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            @if (TempData["Info"] is string infoMsg)
+            {
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="fa-solid fa-file-invoice-dollar me-2"></i>@infoMsg
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             }

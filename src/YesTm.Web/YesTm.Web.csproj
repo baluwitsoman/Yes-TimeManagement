@@ -4,7 +4,31 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Release version: bump by hand for each release (major.minor.patch). -->
+    <VersionPrefix>1.2.0</VersionPrefix>
+    <!-- Build number: changes on EVERY build / publish (local time, yyMMdd.HHmm), shown in the app footer. -->
+    <BuildStamp>$([System.DateTime]::Now.ToString('yyMMdd.HHmm'))</BuildStamp>
+    <InformationalVersion>$(VersionPrefix)+$(BuildStamp)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildStamp" Value="$(BuildStamp)" />
+    <AssemblyMetadata Include="BuildTime" Value="$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm'))" />
+  </ItemGroup>
+
+  <!-- Git commit of the build (skipped quietly when git is not available on the build machine). -->
+  <Target Name="AddGitCommitMetadata" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" StandardOutputImportance="low"
+          StandardErrorImportance="low" IgnoreExitCode="true" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommit" />
+      <Output TaskParameter="ExitCode" PropertyName="GitExit" />
+    </Exec>
+    <ItemGroup Condition="'$(GitExit)' == '0' And '$(GitCommit)' != ''">
+      <AssemblyMetadata Include="GitCommit" Value="$(GitCommit)" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.1" />
